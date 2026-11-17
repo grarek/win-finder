@@ -29,25 +29,43 @@ public static class WindowManager
         return CreateWindow([tab]);
     }
 
-    /// <summary>Restores the previous session, or opens Home. A path argument opens there instead.</summary>
+    /// <summary>
+    /// Restores the previous session (or opens Home). A path argument (e.g. a taskbar jump list
+    /// favorite) then opens in its own window on top, so the saved tabs aren't lost.
+    /// </summary>
     public static void Start(string? startPath)
     {
-        if (!string.IsNullOrWhiteSpace(startPath))
-        {
-            string expanded = PathUtil.ExpandUserInput(startPath);
-            if (Directory.Exists(expanded))
-            {
-                CreateWindow(Location.Folder(expanded));
-                return;
-            }
-            if (File.Exists(expanded) && PathUtil.Parent(expanded) is { } parent)
-            {
-                var w = CreateWindow(Location.Folder(parent));
-                w.ViewModel.SelectedTab?.RequestSelect([expanded]);
-                return;
-            }
-        }
+        RestoreSessionOrHome();
+        if (OpenPath(startPath) is { } requested) requested.BringToFront();
+    }
 
+    /// <summary>A launch forwarded from a second copy of the app: open its folder, or Home, in a new window.</summary>
+    public static void OpenFromLaunch(string? path)
+    {
+        var window = OpenPath(path) ?? CreateWindow(Location.Folder(KnownFolders.Home), CurrentViewMode());
+        window.BringToFront();
+    }
+
+    private static ViewMode? CurrentViewMode() => OpenWindows.LastOrDefault()?.ViewModel.SelectedTab?.ViewMode;
+
+    /// <summary>Opens a folder (or a file's folder, with the file selected) in a new window. Null if the path doesn't exist.</summary>
+    private static MainWindow? OpenPath(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        string expanded = PathUtil.ExpandUserInput(raw);
+        if (Directory.Exists(expanded))
+            return CreateWindow(Location.Folder(expanded), CurrentViewMode());
+        if (File.Exists(expanded) && PathUtil.Parent(expanded) is { } parent)
+        {
+            var w = CreateWindow(Location.Folder(parent), CurrentViewMode());
+            w.ViewModel.SelectedTab?.RequestSelect([expanded]);
+            return w;
+        }
+        return null;
+    }
+
+    private static void RestoreSessionOrHome()
+    {
         var session = AppServices.Settings.Current.Session;
         if (session is { Windows.Count: > 0 })
         {
