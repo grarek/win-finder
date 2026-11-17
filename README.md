@@ -147,6 +147,8 @@ WinFinder updates itself from this repository's GitHub Releases.
 
 Running apps then pick the release up through the updater. The workflow can also be run by hand from the Actions tab.
 
+Pull requests into `main` run the same tests and builds, but don't create a release. The two zips are attached to the workflow run as artifacts for 7 days, so you can try a PR's build before merging.
+
 To point the updater at a fork, publish with `-p:UpdateRepository=owner/repo`.
 
 ## Develop

@@ -2,8 +2,12 @@ name: Release
 
 # Every push to main (i.e. every merged PR) builds, tests and publishes a new
 # GitHub Release marked "Latest", with x64 and ARM64 zips attached.
+# Pull requests run the same build and tests (and upload the zips as artifacts)
+# but don't create a release, so problems show up before merging.
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -11,8 +15,9 @@ permissions:
   contents: write # create releases and tags
 
 concurrency:
-  group: release-main
-  cancel-in-progress: false # never cancel a release half-way through
+  # Releases from main queue up and never cancel; superseded PR builds are cancelled.
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'release-main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   release:
@@ -55,7 +60,16 @@ jobs:
           }
           Get-ChildItem dist | Format-Table Name, Length
 
+      - name: Upload build artifacts (pull requests)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinFinder-pr-${{ github.event.pull_request.number }}
+          path: dist/*.zip
+          retention-days: 7
+
       - name: Create GitHub release
+        if: github.event_name != 'pull_request'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
