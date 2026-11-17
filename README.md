@@ -143,7 +143,9 @@ WinFinder updates itself from this repository's GitHub Releases.
 The **Build and release** workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) runs on every push to `main`, which includes every merged pull request. It:
 1. runs the tests;
 2. publishes optimized self-contained `win-x64` and `win-arm64` builds;
-3. creates a GitHub Release `v1.0.<run number>`, marked Latest, with both zips and auto-generated notes.
+3. creates a GitHub Release, marked Latest, with both zips and auto-generated notes.
+
+Releases are numbered one after another: each is the highest existing `vX.Y.Z` tag plus one (`v1.0.8` → `v1.0.9` → `v1.0.10`), worked out by [`tools/next-version.ps1`](tools/next-version.ps1). Re-running the workflow for a commit that was already released reuses its version instead of creating a new release. To start a new minor or major series, push a tag such as `v1.1.0` to the commit you want; the next release continues from there.
 
 Running apps then pick the release up through the updater. The workflow can also be run by hand from the Actions tab.
 
