@@ -1,4 +1,4 @@
-name: Release
+name: Build and release
 
 # Every push to main (i.e. every merged PR) builds, tests and publishes a new
 # GitHub Release marked "Latest", with x64 and ARM64 zips attached.
@@ -42,7 +42,8 @@ jobs:
         shell: pwsh
         run: dotnet test tests/WinFinder.Core.Tests -c Release --logger "console;verbosity=normal"
 
-      - name: Publish x64 and ARM64
+      # "dotnet publish" only compiles a ready-to-run app folder; nothing is released here.
+      - name: Build x64 and ARM64 app packages
         shell: pwsh
         run: |
           $targets = @(
@@ -60,7 +61,7 @@ jobs:
           }
           Get-ChildItem dist | Format-Table Name, Length
 
-      - name: Upload build artifacts (pull requests)
+      - name: Attach test builds to this run (pull requests only)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
@@ -68,7 +69,7 @@ jobs:
           path: dist/*.zip
           retention-days: 7
 
-      - name: Create GitHub release
+      - name: Create GitHub release (main only)
         if: github.event_name != 'pull_request'
         shell: pwsh
         env:

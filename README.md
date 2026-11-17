@@ -140,7 +140,7 @@ WinFinder updates itself from this repository's GitHub Releases.
 
 ## Releases (CI)
 
-[`.github/workflows/release.yml`](.github/workflows/release.yml) runs on every push to `main`, which includes every merged pull request. It:
+The **Build and release** workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) runs on every push to `main`, which includes every merged pull request. It:
 1. runs the tests;
 2. publishes optimized self-contained `win-x64` and `win-arm64` builds;
 3. creates a GitHub Release `v1.0.<run number>`, marked Latest, with both zips and auto-generated notes.
