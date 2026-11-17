@@ -55,6 +55,11 @@ public sealed class AppSettings
     public Dictionary<string, FolderViewState> Folders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, double> ColumnWidths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public SessionState? Session { get; set; }
+
+    // Updates
+    public bool AutoCheckForUpdates { get; set; } = true;
+    public DateTime? LastUpdateCheckUtc { get; set; }
+    public string? SkippedVersion { get; set; }
 }
 
 /// <summary>JSON settings in %LocalAppData%\WinFinder\settings.json, written atomically and debounced.</summary>

@@ -66,6 +66,8 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         TransferService.CutChanged += OnCutChanged;
+        UpdateService.Instance.UpdateAvailable += ShowUpdate;
+        if (UpdateService.Instance.Available is { } pending) ShowUpdate(pending);
 
         Activated += (_, e) =>
         {
@@ -88,6 +90,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         {
             WindowManager.OnWindowClosed(this);
             TransferService.CutChanged -= OnCutChanged;
+            UpdateService.Instance.UpdateAvailable -= ShowUpdate;
             foreach (var tab in ViewModel.Tabs.ToList()) tab.Dispose();
         };
 
@@ -463,6 +466,16 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         ActionsMenu.Items.Add(new MenuFlyoutSeparator());
         var undo = AppServices.FileOps.Undo.Peek();
         ActionsMenu.Items.Add(Item(undo?.Description ?? "Undo", "\uE7A7", "Ctrl+Z", () => Execute(FinderCommand.Undo), undo is not null));
+        ActionsMenu.Items.Add(new MenuFlyoutSeparator());
+        ActionsMenu.Items.Add(Item("Check for Updates\u2026", "\uE895", null, () => _ = CheckForUpdatesAsync()));
+        var autoUpdate = new ToggleMenuFlyoutItem { Text = "Check for Updates Automatically", IsChecked = AppServices.Settings.Current.AutoCheckForUpdates };
+        autoUpdate.Click += (_, _) =>
+        {
+            AppServices.Settings.Current.AutoCheckForUpdates = autoUpdate.IsChecked;
+            AppServices.Settings.SaveSoon();
+        };
+        ActionsMenu.Items.Add(autoUpdate);
+        ActionsMenu.Items.Add(new MenuFlyoutItem { Text = $"WinFinder {UpdateService.Instance.CurrentVersionText}", IsEnabled = false });
     }
 
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
@@ -476,6 +489,87 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
     {
         _searchDebounce?.Stop();
         Tab?.Search(sender.Text);
+    }
+
+    // ----- updates --------------------------------------------------------------------------------
+
+    private Core.Updates.ReleaseInfo? _offeredUpdate;
+
+    private void ShowUpdate(Core.Updates.ReleaseInfo release)
+    {
+        _offeredUpdate = release;
+        UpdateBar.Title = "Update available";
+        UpdateBar.Message = $"WinFinder {release.Version.ToString(3)} is available (you have {UpdateService.Instance.CurrentVersionText}).";
+        UpdateBar.Severity = InfoBarSeverity.Informational;
+        UpdateNowButton.IsEnabled = true;
+        UpdateNowButton.Content = UpdateService.Instance.InPlaceUpdateBlocker(release) is null ? "Update and restart" : "Download";
+        UpdateProgress.Visibility = Visibility.Collapsed;
+        SkipVersionLink.Visibility = Visibility.Visible;
+        UpdateBar.IsOpen = true;
+    }
+
+    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (_offeredUpdate is not { } release) return;
+        if (UpdateService.Instance.InPlaceUpdateBlocker(release) is { } reason)
+        {
+            // Can't replace this copy in place: send the user to the release page instead.
+            ShellInfo.Open(release.HtmlUrl, Hwnd);
+            UpdateBar.Message = reason + " The release page has been opened so you can download it.";
+            return;
+        }
+
+        UpdateNowButton.IsEnabled = false;
+        SkipVersionLink.Visibility = Visibility.Collapsed;
+        UpdateProgress.Visibility = Visibility.Visible;
+        UpdateProgress.Value = 0;
+        UpdateBar.IsClosable = false;
+        UpdateBar.Message = $"Downloading WinFinder {release.Version.ToString(3)}…";
+        try
+        {
+            var progress = new Progress<double>(p => UpdateProgress.Value = p);
+            await UpdateService.Instance.PrepareAndLaunchUpdaterAsync(release, progress);
+            UpdateBar.Message = "Restarting to finish the update…";
+            WindowManager.ExitForUpdate();
+        }
+        catch (Exception ex)
+        {
+            UpdateBar.Severity = InfoBarSeverity.Error;
+            UpdateBar.Title = "Update failed";
+            UpdateBar.Message = ex.Message;
+            UpdateBar.IsClosable = true;
+            UpdateNowButton.IsEnabled = true;
+            UpdateProgress.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void WhatsNew_Click(object sender, RoutedEventArgs e)
+    {
+        if (_offeredUpdate is { HtmlUrl.Length: > 0 } r) ShellInfo.Open(r.HtmlUrl, Hwnd);
+    }
+
+    private void SkipVersion_Click(object sender, RoutedEventArgs e)
+    {
+        if (_offeredUpdate is { } r) UpdateService.Instance.Skip(r);
+        UpdateBar.IsOpen = false;
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var latest = await UpdateService.Instance.CheckAsync(manual: true);
+            if (latest is not null && Core.Updates.UpdateChecker.IsNewer(latest.Version, UpdateService.Instance.CurrentVersion))
+                return; // the update bar is showing
+            string message = latest is null
+                ? $"No releases have been published yet. You have version {UpdateService.Instance.CurrentVersionText}."
+                : $"You're up to date. WinFinder {UpdateService.Instance.CurrentVersionText} is the latest version.";
+            await Dialogs.ShowMessageAsync(Root.XamlRoot, "Check for Updates", message);
+        }
+        catch (Exception ex)
+        {
+            await Dialogs.ShowMessageAsync(Root.XamlRoot, "Check for Updates", $"Couldn't reach GitHub: {ex.Message}");
+        }
     }
 
     // ----- mouse back/forward buttons -------------------------------------------------------------

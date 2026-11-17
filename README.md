@@ -108,13 +108,46 @@ Explorer's keys keep working; Finder's are added where they don't clash.
 
 ## Install
 
-For everyday use, install a Release build. It opens in well under a second.
+### Download a release
+1. Open the [latest release](https://github.com/grarek/win-finder/releases/latest).
+2. Download the zip for your PC: `win-x64` for most PCs, or `win-arm64` for Snapdragon/ARM devices.
+3. Extract it to a folder you can write to, such as `%LocalAppData%\Programs\WinFinder`.
+4. Run `WinFinder.exe`.
+
+The builds aren't code-signed, so Windows SmartScreen may warn on first launch; choose **More info → Run anyway**.
+
+### Or build and install from source
 
 ```bash
 powershell -ExecutionPolicy Bypass -File tools\install.ps1
 ```
 
-This publishes an optimized, self-contained build to `%LocalAppData%\Programs\WinFinder` and adds a WinFinder shortcut to the Start Menu. Rerun it to update after pulling changes; close WinFinder first.
+This publishes an optimized, self-contained build to `%LocalAppData%\Programs\WinFinder` and adds a WinFinder shortcut to the Start Menu. Close WinFinder first if it's running.
+
+## Updates
+
+WinFinder updates itself from this repository's GitHub Releases.
+
+- **Automatic check:** Release builds check about 15 seconds after startup, at most once a day. Turn this off under **… → Check for Updates Automatically**.
+- **Manual check:** **… → Check for Updates…** checks now, in any build.
+- **When a newer version exists**, a bar appears under the toolbar with three options:
+  - **Update and restart**: downloads the zip for your processor and closes WinFinder. A small helper then swaps the new files into the app folder and reopens WinFinder.
+  - **What's new**: opens the release notes.
+  - **Skip this version**.
+- **Safety:** the swap is a folder rename. If it can't happen (for example, a file in the app folder is in use), the current version is kept and the reason is written to `update.log` in the data folder.
+- **What's kept:** settings, tags, favorites and open tabs live outside the app folder, so updates keep them.
+- **When it can't install in place:** a development build (`dotnet run`), or an app folder WinFinder can't write to (such as Program Files), gets the release page instead.
+
+## Releases (CI)
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) runs on every push to `main`, which includes every merged pull request. It:
+1. runs the tests;
+2. publishes optimized self-contained `win-x64` and `win-arm64` builds;
+3. creates a GitHub Release `v1.0.<run number>`, marked Latest, with both zips and auto-generated notes.
+
+Running apps then pick the release up through the updater. The workflow can also be run by hand from the Actions tab.
+
+To point the updater at a fork, publish with `-p:UpdateRepository=owner/repo`.
 
 ## Develop
 
@@ -143,6 +176,8 @@ dotnet test tests/WinFinder.Core.Tests
 | `src/WinFinder.Core` | UI-free logic: directory listing and watching, sorting, navigation and the column model, the keymap, shell interop (thumbnails, IFileOperation and undo, context menus), tags, search, settings |
 | `src/WinFinder.App` | The WinUI 3 app: view models (tabs, folder contents, list tree, column view, sidebar), views, window and session management |
 | `tests/WinFinder.Core.Tests` | xUnit tests for Core |
+| `src/WinFinder.App/Services/UpdateService.cs` | The in-app updater (release check, download, swap-and-restart helper) |
+| `.github/workflows/release.yml` | Builds, tests and publishes a GitHub Release on every push to `main` |
 | `tools/install.ps1` | Publishes the Release build and adds the Start Menu shortcut |
 | `tools/make-icon.ps1` | Draws the app icon and writes `src/WinFinder.App/Assets/WinFinder.ico` (16–256 px; small sizes use a simplified drawing) |
 

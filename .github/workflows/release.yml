@@ -1,0 +1,79 @@
+name: Release
+
+# Every push to main (i.e. every merged PR) builds, tests and publishes a new
+# GitHub Release marked "Latest", with x64 and ARM64 zips attached.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create releases and tags
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false # never cancel a release half-way through
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      VERSION: 1.0.${{ github.run_number }}
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for generated release notes
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test tests/WinFinder.Core.Tests -c Release --logger "console;verbosity=normal"
+
+      - name: Publish x64 and ARM64
+        shell: pwsh
+        run: |
+          $targets = @(
+            @{ Rid = 'win-x64';   Platform = 'x64'   },
+            @{ Rid = 'win-arm64'; Platform = 'ARM64' }
+          )
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($t in $targets) {
+            $out = "publish/$($t.Rid)"
+            dotnet publish src/WinFinder.App -c Release -r $t.Rid "-p:Platform=$($t.Platform)" `
+              -p:PublishReadyToRun=true "-p:Version=$env:VERSION" -o $out
+            if ($LASTEXITCODE -ne 0) { throw "publish failed for $($t.Rid)" }
+            if (-not (Test-Path "$out/WinFinder.exe")) { throw "WinFinder.exe missing for $($t.Rid)" }
+            Compress-Archive -Path "$out/*" -DestinationPath "dist/WinFinder-$env:VERSION-$($t.Rid).zip"
+          }
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v$env:VERSION"
+          $notes = @"
+          Built from $env:GITHUB_SHA.
+
+          **Install:** download the zip for your PC (most PCs: ``win-x64``; Surface Pro X / Snapdragon: ``win-arm64``), extract it anywhere, and run ``WinFinder.exe``. Or clone the repo and run ``tools\install.ps1`` for a Start Menu shortcut.
+
+          The build isn't code-signed, so Windows SmartScreen may warn on first launch: choose **More info → Run anyway**.
+          "@
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            # Re-run of the same workflow run: refresh the assets instead of failing.
+            gh release upload $tag dist/*.zip --clobber
+          } else {
+            gh release create $tag dist/*.zip --target $env:GITHUB_SHA --title "WinFinder $env:VERSION" `
+              --notes $notes --generate-notes --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw "gh release failed" }

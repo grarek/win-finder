@@ -91,8 +91,12 @@ public static class AppServices
         }
     }
 
+    private static bool _shutDown;
+
     public static void Shutdown()
     {
+        if (_shutDown) return; // may be reached from both an update-exit and the last window closing
+        _shutDown = true;
         Settings.Save();
         FileOps.Dispose();
         Thumbnails.Dispose();
