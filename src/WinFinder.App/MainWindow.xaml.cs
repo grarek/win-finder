@@ -156,6 +156,14 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         AppWindow.MoveAndResize(new RectInt32(area.X + (area.Width - w) / 2 + offset, area.Y + (area.Height - h) / 2 + offset, w, h));
     }
 
+    /// <summary>Shows this window and puts it in front (restoring it if minimized).</summary>
+    public void BringToFront()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } p) p.Restore();
+        Activate();
+        WindowHelper.BringToForeground(Hwnd);
+    }
+
     public WindowState CaptureState()
     {
         bool maximized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };

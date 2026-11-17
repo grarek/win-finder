@@ -49,6 +49,12 @@ A Windows file manager that works like macOS Finder. It's built with C#, .NET 8 
 - Middle-click or Ctrl+click a folder to open it in a new tab.
 - Drag files onto a tab header (hovering switches to that tab). Drag a tab out to make a new window, or into another window.
 - Open tabs, including their column layout, are restored on the next launch.
+- **One app, many windows**, like Explorer: launching WinFinder again (Start Menu, taskbar, command line) opens a new window in the running copy instead of starting a second one. A folder passed on the command line opens in that new window.
+
+### Taskbar jump list
+Right-click WinFinder's taskbar button for your **Favorites** (they follow the sidebar as you pin, unpin, rename or reorder) and **New window**.
+
+Windows only allows a separate "Favorites" heading while **Settings → Personalization → Start → Show recently opened items in Start, Jump Lists, and File Explorer** is on. With it off, the favorites appear under **Tasks** instead, above New window.
 
 ### Views
 - **List view**: inline folder expansion (disclosure triangles), sortable and resizable columns.

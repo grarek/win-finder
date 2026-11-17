@@ -31,6 +31,17 @@ public static class WindowHelper
     [DllImport("user32.dll")]
     private static extern uint GetDoubleClickTime();
 
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int dwProcessId);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>Lets another process (the running WinFinder) bring its window to the front.</summary>
+    public static void AllowSetForeground(int processId) => AllowSetForegroundWindow(processId);
+
+    public static void BringToForeground(IntPtr hwnd) => SetForegroundWindow(hwnd);
+
     /// <summary>The user's double-click interval (Control Panel setting), in milliseconds.</summary>
     public static uint DoubleClickTimeMs => GetDoubleClickTime();
 
