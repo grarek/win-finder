@@ -335,7 +335,8 @@ public sealed partial class BrowserTabViewModel : ObservableObject, IDisposable
                 string.Equals(PathUtil.Parent(i.Path), target, StringComparison.OrdinalIgnoreCase))?.Path;
             ViewMode = mode;
             SaveFolderState(target);
-            _history.ReplaceCurrent(Location.Folder(target)); // drop the column root
+            // The location keeps its column root, so switching straight back to columns restores
+            // the same columns. List and icon views ignore it.
             Load(select);
             return;
         }
