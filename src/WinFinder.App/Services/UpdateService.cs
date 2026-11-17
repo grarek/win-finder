@@ -200,6 +200,10 @@ public sealed class UpdateService
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
+            // Never inherit the app's working folder: if that's the install folder (as when started
+            // from the Start Menu shortcut), the helper itself would block renaming it. The temp root
+            // is also outside the download folder the helper deletes when it's done.
+            WorkingDirectory = Path.GetTempPath(),
         };
         foreach (var arg in new[]
         {
@@ -208,9 +212,26 @@ public sealed class UpdateService
             "-Source", extracted,
             "-Target", InstallFolder,
             "-Log", log,
+            "-Version", release.Version.ToString(3),
         })
             psi.ArgumentList.Add(arg);
         Process.Start(psi);
+    }
+
+    /// <summary>File the helper writes so the relaunched app can say whether the update worked.</summary>
+    private static string ResultFile => Path.Combine(Core.Settings.SettingsStore.DefaultDirectory, "update-result.txt");
+
+    /// <summary>The outcome of an update that just ran (read once, then forgotten).</summary>
+    public UpdateResult? TakeLastResult()
+    {
+        try
+        {
+            if (!File.Exists(ResultFile)) return null;
+            var result = UpdateResult.Parse(File.ReadAllText(ResultFile));
+            File.Delete(ResultFile);
+            return result;
+        }
+        catch { return null; }
     }
 
     /// <summary>
@@ -218,10 +239,16 @@ public sealed class UpdateService
     /// folders by rename (fast, and reversible if anything fails), and relaunches.
     /// </summary>
     private const string ApplyScript = """
-        param([int]$ParentPid, [string]$Source, [string]$Target, [string]$Log)
+        param([int]$ParentPid, [string]$Source, [string]$Target, [string]$Log, [string]$Version)
         $ErrorActionPreference = 'Stop'
+        # Stay out of the folders being renamed or deleted (a process's working folder can't be renamed).
+        try { Set-Location -LiteralPath ([IO.Path]::GetTempPath()) } catch {}
+        $resultFile = Join-Path (Split-Path $Log -Parent) 'update-result.txt'
         function Write-Log([string]$m) {
             try { Add-Content -LiteralPath $Log -Value ("[{0}] {1}" -f (Get-Date -Format o), $m) } catch {}
+        }
+        function Write-Result([string]$status, [string]$message) {
+            try { Set-Content -LiteralPath $resultFile -Value @($status, $Version, $message) -Encoding UTF8 } catch {}
         }
         try {
             Write-Log "Updating $Target from $Source (waiting for pid $ParentPid)"
@@ -250,14 +277,17 @@ public sealed class UpdateService
             }
             Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
             Write-Log "Update installed."
+            Write-Result 'ok' ''
         } catch {
             Write-Log "Update failed, keeping the current version: $($_.Exception.Message)"
+            Write-Result 'failed' $_.Exception.Message
             if ((Test-Path -LiteralPath $Target) -and (Test-Path -LiteralPath "$Target.new")) {
                 Remove-Item -LiteralPath "$Target.new" -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
         try {
-            Start-Process -FilePath (Join-Path $Target 'WinFinder.exe') -WorkingDirectory $Target
+            # Relaunch from the user's folder, not the install folder, so the next update can rename it.
+            Start-Process -FilePath (Join-Path $Target 'WinFinder.exe') -WorkingDirectory $env:USERPROFILE
             Write-Log "Relaunched WinFinder."
         } catch {
             Write-Log "Couldn't relaunch WinFinder: $($_.Exception.Message)"

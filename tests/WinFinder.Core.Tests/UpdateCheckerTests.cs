@@ -68,6 +68,22 @@ public class UpdateCheckerTests
     }
 
     [Fact]
+    public void UpdateResult_ParsesHelperOutput()
+    {
+        var ok = UpdateResult.Parse("﻿ok\r\n1.0.7\r\n\r\n")!;
+        Assert.True(ok.Succeeded);
+        Assert.Equal("1.0.7", ok.Version);
+        Assert.Equal("", ok.Message);
+
+        var failed = UpdateResult.Parse("failed\n1.0.7\nThe process cannot access the file\n")!;
+        Assert.False(failed.Succeeded);
+        Assert.Equal("The process cannot access the file", failed.Message);
+
+        Assert.Null(UpdateResult.Parse(""));
+        Assert.Null(UpdateResult.Parse("garbage"));
+    }
+
+    [Fact]
     public void Parse_IgnoresDraftsAndPrereleases()
     {
         Assert.Null(UpdateChecker.Parse(LatestJson.Replace("\"prerelease\": false", "\"prerelease\": true")));
