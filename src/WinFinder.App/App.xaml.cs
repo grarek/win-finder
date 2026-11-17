@@ -48,7 +48,7 @@ public partial class App : Application
         StartupTrace.Mark("sidebar initialized");
 
         var cmdArgs = Environment.GetCommandLineArgs();
-        string? startPath = cmdArgs.Length > 1 ? cmdArgs[1] : null;
+        string? startPath = cmdArgs.Length > 1 ? Core.Shell.CommandLine.CleanPath(cmdArgs[1]) : null;
         // Resolve a relative path argument first, then move the working folder off the install
         // folder (shortcuts often start apps there), so nothing we launch keeps it busy and an
         // update can rename it.
@@ -61,6 +61,7 @@ public partial class App : Application
         StartupTrace.Mark("window created + activated");
         UpdateService.Instance.StartBackgroundCheck();
         JumpListService.Initialize();
+        ExplorerReplacement.Initialize();
         var flush = DispatcherQueue.GetForCurrentThread().CreateTimer();
         flush.Interval = TimeSpan.FromSeconds(3);
         flush.IsRepeating = false;

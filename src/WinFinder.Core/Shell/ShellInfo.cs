@@ -32,8 +32,8 @@ public static class ShellInfo
         });
     }
 
-    /// <summary>Opens a file with its default handler (like double-clicking in Explorer).</summary>
-    public static bool Open(string path, IntPtr hwnd = default) => Execute(path, null, hwnd);
+    /// <summary>Opens a file with its default handler (like double-clicking in Explorer), or with a specific verb.</summary>
+    public static bool Open(string path, IntPtr hwnd = default, string? verb = null) => Execute(path, verb, hwnd);
 
     /// <summary>Shows the "Open with" chooser.</summary>
     public static bool OpenWith(string path, IntPtr hwnd = default) => Execute(path, "openas", hwnd);

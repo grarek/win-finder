@@ -151,6 +151,9 @@ public sealed partial class BrowserTabViewModel : ObservableObject, IDisposable
 
     public void Start() => Load(null);
 
+    /// <summary>First load, selecting these items once the folder is listed (e.g. "Show in folder").</summary>
+    public void Start(IReadOnlyList<string>? select) => LoadSelecting(select);
+
     public void Navigate(Location location, string? selectPath = null)
     {
         if (location.SameAs(Location) && location.Kind != LocationKind.Search)
@@ -220,8 +223,12 @@ public sealed partial class BrowserTabViewModel : ObservableObject, IDisposable
         Load(keep);
     }
 
-    private void Load(string? selectPath)
+    private void Load(string? selectPath) => LoadSelecting(selectPath is null ? null : [selectPath]);
+
+    private void LoadSelecting(IReadOnlyList<string>? select)
     {
+        select = select is { Count: > 0 } ? select : null;
+        string? selectPath = select?[0];
         Location = _history.Current;
 
         // A location recorded inside column view stays in column view (a folder's own saved
@@ -274,7 +281,7 @@ public sealed partial class BrowserTabViewModel : ObservableObject, IDisposable
                 if (!ReferenceEquals(Contents, contents)) return;
                 StartupTrace.Mark($"folder listed: {Location.Path}");
                 UpdateStatus();
-                if (selectPath is not null) RequestSelect([selectPath]);
+                if (select is not null) RequestSelect(select);
                 else RequestFocus();
             };
             _ = contents.LoadAsync();

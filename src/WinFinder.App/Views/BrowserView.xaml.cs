@@ -17,6 +17,10 @@ namespace WinFinder.App.Views;
 public interface IBrowserHost
 {
     IntPtr Hwnd { get; }
+
+    /// <summary>When the window last became active (a click that activates it shouldn't start a rename).</summary>
+    DateTime LastActivatedUtc { get; }
+
     void OpenItems(BrowserTabViewModel tab, IReadOnlyList<FileItemViewModel> items, bool newTab);
     void OpenInNewTab(string folder);
     void ShowContextMenu(BrowserTabViewModel tab, IReadOnlyList<FileItemViewModel>? items, Point position);
@@ -105,11 +109,13 @@ public sealed partial class BrowserView : UserControl
 
     private void Items_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        CancelPendingRename();
         if (sender is ListViewBase list) Tab.SelectedItems = Selected(list);
     }
 
     private void Column_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        CancelPendingRename();
         if (sender is not ListView list || list.DataContext is not ColumnViewModel column) return;
         var selected = Selected(list);
         Tab.SelectedItems = selected;
@@ -123,7 +129,7 @@ public sealed partial class BrowserView : UserControl
         Tab.SelectedItems = Selected(list); // status bar and commands follow the focused column
     }
 
-    private void OnSelectRequested(IReadOnlyList<string> paths, bool beginRename)
+    private async void OnSelectRequested(IReadOnlyList<string> paths, bool beginRename)
     {
         if (Tab.IsColumnView)
         {
@@ -131,6 +137,10 @@ public sealed partial class BrowserView : UserControl
                 SelectInColumn(active, paths[0], attempts: 0);
             return;
         }
+        // In a brand-new window the folder can finish listing before the list is bound and laid
+        // out; wait for it briefly rather than dropping the selection.
+        for (int attempt = 0; attempt < 40 && (!IsLoaded || ActiveList() is not { Items.Count: > 0 }); attempt++)
+            await Task.Delay(50);
         var list = ActiveList();
         if (list is null) return;
         var lookup = list.Items.OfType<FileItemViewModel>().ToDictionary(i => i.Path, StringComparer.OrdinalIgnoreCase);
@@ -221,6 +231,7 @@ public sealed partial class BrowserView : UserControl
 
     private void Item_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
+        CancelPendingRename();
         if (ItemFrom(e.OriginalSource) is not { } item || item.IsRenaming) return;
         _host.OpenItems(Tab, [item], WindowHelper.IsCtrlDown() && item.IsFolder);
         e.Handled = true;
@@ -250,6 +261,7 @@ public sealed partial class BrowserView : UserControl
 
     private void OnAnyPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        _renameTimer?.Stop(); // e.g. the second click of a double-click
         var props = e.GetCurrentPoint(this).Properties;
         if (!props.IsMiddleButtonPressed) return;
         if (ItemFrom(e.OriginalSource) is { IsFolder: true } item)
@@ -361,6 +373,88 @@ public sealed partial class BrowserView : UserControl
         list.SelectedItem = match;
         list.ScrollIntoView(match);
         e.Handled = true;
+    }
+
+    // ----- click-to-rename ---------------------------------------------------------------------
+    // Like Explorer and Finder: clicking the name of the item that is already selected (alone, in
+    // the focused list) starts renaming it once the double-click time has passed without a
+    // second click.
+
+    private FileItemViewModel? _renamePressItem;
+    private ListViewBase? _renamePressList;
+    private (FileItemViewModel Item, ListViewBase List)? _renameCandidate;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _renameTimer;
+
+    /// <summary>
+    /// Runs before the list handles the press, so it still sees the selection and focus from
+    /// before this click.
+    /// </summary>
+    private void ItemName_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _renamePressItem = null;
+        _renamePressList = null;
+        if (sender is not FrameworkElement { DataContext: FileItemViewModel item } element || item.IsDrive) return;
+        if (e.Pointer.PointerDeviceType != PointerDeviceType.Mouse) return;
+        if (!e.GetCurrentPoint(element).Properties.IsLeftButtonPressed) return;
+        if (WindowHelper.CurrentModifiers() != Core.Input.KeyModifiers.None) return;
+        // A click that brings the window to the front only activates it.
+        if ((DateTime.UtcNow - _host.LastActivatedUtc).TotalMilliseconds < 400) return;
+        if (FindAncestor<ListViewBase>(element) is not { } list) return;
+        if (list.SelectedItems.Count != 1 || !ReferenceEquals(list.SelectedItem, item)) return;
+        // The list must already have focus: clicking back into a parent column (or into the
+        // list from the sidebar or search box) just selects there.
+        if (!HasFocusWithin(list)) return;
+        _renamePressItem = item;
+        _renamePressList = list;
+    }
+
+    private void ItemName_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        var item = _renamePressItem;
+        var list = _renamePressList;
+        _renamePressItem = null;
+        _renamePressList = null;
+        if (item is null || list is null || !ReferenceEquals((sender as FrameworkElement)?.DataContext, item)) return;
+
+        if (_renameTimer is null)
+        {
+            _renameTimer = DispatcherQueue.CreateTimer();
+            _renameTimer.IsRepeating = false;
+            _renameTimer.Tick += (_, _) => RenameCandidateNow();
+        }
+        _renameCandidate = (item, list);
+        _renameTimer.Interval = TimeSpan.FromMilliseconds(WindowHelper.DoubleClickTimeMs + 50);
+        _renameTimer.Start();
+    }
+
+    private void RenameCandidateNow()
+    {
+        if (_renameCandidate is not { } c) return;
+        _renameCandidate = null;
+        if (!IsLoaded || Visibility != Visibility.Visible || c.Item.IsRenaming) return;
+        if (c.List.SelectedItems.Count != 1 || !ReferenceEquals(c.List.SelectedItem, c.Item)) return;
+        Tab.BeginRename(c.Item);
+    }
+
+    private void CancelPendingRename()
+    {
+        _renameTimer?.Stop();
+        _renameCandidate = null;
+    }
+
+    private bool HasFocusWithin(DependencyObject container)
+    {
+        if (XamlRoot is null) return false;
+        for (var d = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, container)) return true;
+        return false;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject start) where T : DependencyObject
+    {
+        for (var d = VisualTreeHelper.GetParent(start); d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is T match) return match;
+        return null;
     }
 
     // ----- inline rename -----------------------------------------------------------------------

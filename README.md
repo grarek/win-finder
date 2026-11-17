@@ -15,7 +15,7 @@ A Windows file manager that works like macOS Finder. It's built with C#, .NET 8 
 - **Path bar**:
   - Clicking a folder inside the current columns keeps them.
   - Clicking a folder above the leftmost column rebuilds the columns from the drive down, so its parents still show.
-- Columns can be resized; Shift+drag resizes all of them. Widths are remembered per folder.
+- All columns share one width, in every folder, tab and window. Drag any column's edge to resize them all; the width is remembered.
 
 ### Quick Look (Space)
 - Previews:
@@ -72,7 +72,16 @@ Windows only allows a separate "Favorites" heading while **Settings → Personal
 - **Ctrl+Z undoes** them, including moves to the Recycle Bin.
 - The clipboard works both ways with Explorer.
 
+### Use instead of File Explorer
+Off by default; turn it on from the **…** menu (**Use Instead of File Explorer**). Then:
+- Folders and drives opened from the desktop, the Run box or other apps open in WinFinder, and so does **Win+E**. This is a per-user setting (HKCU) and needs no admin rights.
+- While WinFinder is running, File Explorer windows that other apps open for a folder on disk move into WinFinder, with the same files selected. That covers a browser's **Show in folder** after a download and **Open file location**, which Windows sends straight to Explorer.
+- Explorer still opens for This PC, Home, Control Panel and the Recycle Bin, for Explorer windows that were already open, and from a sidebar item's **Open in File Explorer**.
+- Turning it off puts everything back. Uninstalling turns it off too; if you use the zip, turn it off before deleting the folder.
+
 ### Also
+- Selected items are highlighted in your Windows accent colour (blue by default), like Finder.
+- Click the name of a selected item to rename it, like Explorer (or press F2).
 - Search the current folder or the whole PC (Windows Search index, with a folder scan as fallback).
 - Go to Folder (Ctrl+Shift+G), Get Info (Ctrl+I), Show Hidden Files (Ctrl+Shift+.). Dot-files are hidden like on macOS.
 - Mouse back/forward buttons and the keyboard's Browser Back/Forward keys navigate.
@@ -202,7 +211,7 @@ dotnet test tests/WinFinder.Core.Tests
 
 - Subfolders expanded inline in list view don't update live; they refresh when re-expanded or after a drop into them. The top-level listing is live.
 - The context menu can only cover items that share a folder. In search results that span several folders, it covers the selected items in the first item's folder.
-- The app runs unpackaged and isn't registered as the default folder handler, so Win+E still opens Explorer.
+- **Use Instead of File Explorer** can only move Explorer windows into WinFinder while WinFinder is running. If WinFinder isn't running, a browser's "Show in folder" still opens Explorer (plain folder opens and Win+E start WinFinder either way). If an Explorer window is already open, Windows may open the folder as a new tab in it instead of a new window; those tabs are left in Explorer.
 
 ## License
 

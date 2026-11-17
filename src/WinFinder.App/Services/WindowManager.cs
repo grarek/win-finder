@@ -22,10 +22,10 @@ public static class WindowManager
         return window;
     }
 
-    public static MainWindow CreateWindow(Location location, ViewMode? view = null)
+    public static MainWindow CreateWindow(Location location, ViewMode? view = null, IReadOnlyList<string>? select = null)
     {
         var tab = new BrowserTabViewModel(location, view);
-        tab.Start();
+        tab.Start(select);
         return CreateWindow([tab]);
     }
 
@@ -46,6 +46,13 @@ public static class WindowManager
         window.BringToFront();
     }
 
+    /// <summary>A folder that File Explorer was asked to show (see <see cref="ExplorerReplacement"/>): a new window with the same selection.</summary>
+    public static void OpenRedirected(string folder, IReadOnlyList<string> selected)
+    {
+        var window = CreateWindow(Location.Folder(folder), CurrentViewMode(), selected);
+        window.BringToFront();
+    }
+
     private static ViewMode? CurrentViewMode() => OpenWindows.LastOrDefault()?.ViewModel.SelectedTab?.ViewMode;
 
     /// <summary>Opens a folder (or a file's folder, with the file selected) in a new window. Null if the path doesn't exist.</summary>
@@ -57,9 +64,7 @@ public static class WindowManager
             return CreateWindow(Location.Folder(expanded), CurrentViewMode());
         if (File.Exists(expanded) && PathUtil.Parent(expanded) is { } parent)
         {
-            var w = CreateWindow(Location.Folder(parent), CurrentViewMode());
-            w.ViewModel.SelectedTab?.RequestSelect([expanded]);
-            return w;
+            return CreateWindow(Location.Folder(parent), CurrentViewMode(), [expanded]);
         }
         return null;
     }
