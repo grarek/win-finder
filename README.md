@@ -109,18 +109,22 @@ Explorer's keys keep working; Finder's are added where they don't clash.
 ## Requirements
 
 - Windows 10 version 2004 (build 19041) or later; Windows 11 recommended.
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Visual Studio isn't needed.
 - The WebView2 runtime (preinstalled on Windows 11), used for PDF and HTML previews.
+- To build from source: the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Visual Studio isn't needed. Releases bundle .NET, so running one needs nothing extra.
 
 ## Install
 
-### Download a release
+### Installer (recommended)
 1. Open the [latest release](https://github.com/grarek/win-finder/releases/latest).
-2. Download the zip for your PC: `win-x64` for most PCs, or `win-arm64` for Snapdragon/ARM devices.
-3. Extract it to a folder you can write to, such as `%LocalAppData%\Programs\WinFinder`.
-4. Run `WinFinder.exe`.
+2. Download the setup for your PC: `WinFinder-<version>-setup-x64.exe` for most PCs, or `-setup-arm64.exe` for Snapdragon/ARM devices.
+3. Run it. It installs for your account only, so it doesn't need admin rights, into `%LocalAppData%\Programs\WinFinder`. It adds a Start Menu shortcut (and a desktop one if you tick it), and adds WinFinder to **Settings → Apps → Installed apps** so you can uninstall it there.
 
-The builds aren't code-signed, so Windows SmartScreen may warn on first launch; choose **More info → Run anyway**.
+The builds aren't code-signed, so Windows SmartScreen may warn; choose **More info → Run anyway**.
+
+Running the setup again (any version) upgrades in place and closes a running WinFinder first. Uninstalling keeps your settings, favorites and tags unless you choose to delete them when asked.
+
+### Zip (no installer)
+Each release also has `WinFinder-<version>-win-x64.zip` / `-win-arm64.zip`. Extract it to a folder you can write to, such as `%LocalAppData%\Programs\WinFinder`, and run `WinFinder.exe`. Right-click the zip → **Properties** → **Unblock** first to avoid the SmartScreen warning.
 
 ### Or build and install from source
 
@@ -142,6 +146,7 @@ WinFinder updates itself from this repository's GitHub Releases.
   - **Skip this version**.
 - **Safety:** the swap is a folder rename. If it can't happen (for example, a file in the app folder is in use), the current version is kept and the reason is written to `update.log` in the data folder.
 - **What's kept:** settings, tags, favorites and open tabs live outside the app folder, so updates keep them.
+- **Installed with the setup:** updates keep its uninstaller and update the version shown in Installed apps.
 - **When it can't install in place:** a development build (`dotnet run`), or an app folder WinFinder can't write to (such as Program Files), gets the release page instead.
 
 ## Releases (CI)
@@ -149,13 +154,14 @@ WinFinder updates itself from this repository's GitHub Releases.
 The **Build and release** workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) runs on every push to `main`, which includes every merged pull request. It:
 1. runs the tests;
 2. publishes optimized self-contained `win-x64` and `win-arm64` builds;
-3. creates a GitHub Release, marked Latest, with both zips and auto-generated notes.
+3. wraps each build in an installer (`WinFinder-<version>-setup-x64.exe` / `-arm64.exe`) with [Inno Setup](https://jrsoftware.org/isinfo.php), from [`installer/WinFinder.iss`](installer/WinFinder.iss);
+4. creates a GitHub Release, marked Latest, with both installers, both zips and auto-generated notes.
 
 Releases are numbered one after another: each is the highest existing `vX.Y.Z` tag plus one (`v1.0.8` → `v1.0.9` → `v1.0.10`), worked out by [`tools/next-version.ps1`](tools/next-version.ps1). Re-running the workflow for a commit that was already released reuses its version instead of creating a new release. To start a new minor or major series, push a tag such as `v1.1.0` to the commit you want; the next release continues from there.
 
 Running apps then pick the release up through the updater. The workflow can also be run by hand from the Actions tab.
 
-Pull requests into `main` run the same tests and builds, but don't create a release. The two zips are attached to the workflow run as artifacts for 7 days, so you can try a PR's build before merging.
+Pull requests into `main` run the same tests and builds, but don't create a release. The installers and zips are attached to the workflow run as artifacts for 7 days, so you can try a PR's build before merging.
 
 To point the updater at a fork, publish with `-p:UpdateRepository=owner/repo`.
 
@@ -188,6 +194,7 @@ dotnet test tests/WinFinder.Core.Tests
 | `tests/WinFinder.Core.Tests` | xUnit tests for Core |
 | `src/WinFinder.App/Services/UpdateService.cs` | The in-app updater (release check, download, swap-and-restart helper) |
 | `.github/workflows/release.yml` | Builds, tests and publishes a GitHub Release on every push to `main` |
+| `installer/WinFinder.iss` | The Inno Setup script for the installers |
 | `tools/install.ps1` | Publishes the Release build and adds the Start Menu shortcut |
 | `tools/make-icon.ps1` | Draws the app icon and writes `src/WinFinder.App/Assets/WinFinder.ico` (16–256 px; small sizes use a simplified drawing) |
 

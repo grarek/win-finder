@@ -265,6 +265,10 @@ public sealed class UpdateService
             $backup = "$Target.old"
             foreach ($p in $staging, $backup) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force } }
             Copy-Item -LiteralPath $Source -Destination $staging -Recurse
+            # Installed with Setup: carry its uninstaller over, or Apps > Installed apps can't remove WinFinder.
+            Get-ChildItem -LiteralPath $Target -File -Filter 'unins*' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^unins\d{3}\.(exe|dat|msg)$' } |
+                Copy-Item -Destination $staging
 
             # [IO.Directory]::Move is a pure rename: it either happens completely or not at all
             # (Move-Item can fall back to a partial copy when a file is in use).
@@ -278,6 +282,12 @@ public sealed class UpdateService
             Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
             Write-Log "Update installed."
             Write-Result 'ok' ''
+            # Keep the version shown in Apps > Installed apps current (Setup's uninstall entry).
+            try {
+                Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+                    Where-Object { "$($_.GetValue('InstallLocation'))".TrimEnd('\') -ieq $Target.TrimEnd('\') } |
+                    ForEach-Object { Set-ItemProperty -LiteralPath $_.PSPath -Name DisplayVersion -Value $Version }
+            } catch { Write-Log "Couldn't update the installed version number: $($_.Exception.Message)" }
         } catch {
             Write-Log "Update failed, keeping the current version: $($_.Exception.Message)"
             Write-Result 'failed' $_.Exception.Message

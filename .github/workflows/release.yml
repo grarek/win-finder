@@ -72,12 +72,35 @@ jobs:
           }
           Get-ChildItem dist | Format-Table Name, Length
 
+      # Wraps each app folder in a Setup.exe (Inno Setup; see installer/WinFinder.iss).
+      - name: Build x64 and ARM64 installers
+        shell: pwsh
+        run: |
+          $iscc = @(
+            (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source,
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Couldn't install Inno Setup" }
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          foreach ($arch in 'x64', 'arm64') {
+            $source = (Resolve-Path "publish/win-$arch").Path
+            & $iscc /Q "/DAppVersion=$env:VERSION" "/DArch=$arch" "/DSourceDir=$source" "/DOutputDir=$PWD\dist" installer/WinFinder.iss
+            if ($LASTEXITCODE -ne 0) { throw "Installer build failed for $arch" }
+          }
+          Get-ChildItem dist | Format-Table Name, Length
+
       - name: Attach test builds to this run (pull requests only)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: WinFinder-pr-${{ github.event.pull_request.number }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.exe
           retention-days: 7
 
       - name: Create GitHub release (main only)
@@ -90,16 +113,19 @@ jobs:
           $notes = @"
           Built from $env:GITHUB_SHA.
 
-          **Install:** download the zip for your PC (most PCs: ``win-x64``; Surface Pro X / Snapdragon: ``win-arm64``), extract it anywhere, and run ``WinFinder.exe``. Or clone the repo and run ``tools\install.ps1`` for a Start Menu shortcut.
+          **Install:** download and run the setup for your PC: ``WinFinder-$env:VERSION-setup-x64.exe`` for most PCs, or ``-setup-arm64.exe`` for Snapdragon / Surface Pro X. No admin rights needed; it adds WinFinder to the Start Menu and to Apps > Installed apps. Already installed? WinFinder updates itself.
 
-          The build isn't code-signed, so Windows SmartScreen may warn on first launch: choose **More info → Run anyway**.
+          The zips are the same app without an installer: extract anywhere and run ``WinFinder.exe``.
+
+          The build isn't code-signed, so Windows SmartScreen may warn: choose **More info → Run anyway**.
           "@
+          $assets = @(Get-ChildItem dist -File | Where-Object { $_.Extension -in '.zip', '.exe' } | ForEach-Object FullName)
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             # Re-run of a commit that was already released: refresh the assets instead of failing.
-            gh release upload $tag dist/*.zip --clobber
+            gh release upload $tag @assets --clobber
           } else {
-            gh release create $tag dist/*.zip --target $env:GITHUB_SHA --title "WinFinder $env:VERSION" `
+            gh release create $tag @assets --target $env:GITHUB_SHA --title "WinFinder $env:VERSION" `
               --notes $notes --generate-notes --latest
           }
           if ($LASTEXITCODE -ne 0) { throw "gh release failed" }
