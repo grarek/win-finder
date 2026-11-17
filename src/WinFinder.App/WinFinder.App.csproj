@@ -15,6 +15,10 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <EnableMsixTooling>true</EnableMsixTooling>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <!-- MVVMTK0045: [ObservableProperty] on fields isn't Native-AOT/trimming compatible for WinRT;
+         the fix (partial properties) needs C# 13 / .NET 9. WinFinder ships ReadyToRun, not
+         Native AOT or trimmed, so this doesn't apply. Revisit if PublishAot/PublishTrimmed is enabled. -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
   <!-- WinUI needs a concrete platform. Default to x64 so `dotnet build`/`dotnet run`
