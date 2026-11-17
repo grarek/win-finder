@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>WinFinder.Core</RootNamespace>
+    <Platforms>x64;ARM64;AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.23" />
+    <PackageReference Include="System.Data.OleDb" Version="9.0.23" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WinFinder.Core.Tests" />
+  </ItemGroup>
+
+</Project>
