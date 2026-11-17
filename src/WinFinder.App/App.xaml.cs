@@ -38,6 +38,7 @@ public partial class App : Application
         string? startPath = cmdArgs.Length > 1 ? cmdArgs[1] : null;
         WindowManager.Start(startPath);
         StartupTrace.Mark("window created + activated");
+        UpdateService.Instance.StartBackgroundCheck();
         var flush = DispatcherQueue.GetForCurrentThread().CreateTimer();
         flush.Interval = TimeSpan.FromSeconds(3);
         flush.IsRepeating = false;

@@ -110,6 +110,14 @@ public static class WindowManager
         if (OpenWindows.Count > 0) SaveSessionSoon();
     }
 
+    /// <summary>Saves the session and settings, then exits so the updater can replace the app's files.</summary>
+    public static void ExitForUpdate()
+    {
+        SaveSession();
+        AppServices.Shutdown();
+        Microsoft.UI.Xaml.Application.Current.Exit();
+    }
+
     public static void SaveSessionSoon()
     {
         if (_saveTimer is null)
