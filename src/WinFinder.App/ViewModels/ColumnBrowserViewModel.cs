@@ -16,13 +16,36 @@ public sealed partial class ColumnViewModel : ObservableObject, IDisposable
         Folder = folder;
         Contents = new FolderContents(Location.Folder(folder), key, descending);
         Contents.Loaded += () => PendingSelectionReady?.Invoke(this);
+        _width = ListLayout.Instance.ColumnWidth;
     }
 
     public string Folder { get; }
     public FolderContents Contents { get; }
 
-    /// <summary>Shared column width (the same for every column; see <see cref="ListLayout.ColumnWidth"/>).</summary>
-    public ListLayout Layout => ListLayout.Instance;
+    /// <summary>
+    /// This column's width. New columns start at <see cref="ListLayout.ColumnWidth"/>; dragging a
+    /// column's edge resizes only that column, and Shift+drag resizes all of them (and sets the default).
+    /// </summary>
+    [ObservableProperty]
+    private double _width;
+
+    /// <summary>Raised when the user resizes this column (not when it is set programmatically).</summary>
+    public event Action<ColumnViewModel, double>? Resized;
+
+    private bool _settingWidth;
+
+    partial void OnWidthChanged(double value)
+    {
+        if (!_settingWidth) Resized?.Invoke(this, value);
+    }
+
+    /// <summary>Sets the width without raising <see cref="Resized"/>.</summary>
+    public void SetWidth(double value)
+    {
+        _settingWidth = true;
+        try { Width = value; }
+        finally { _settingWidth = false; }
+    }
 
     /// <summary>Item to select once loaded (used when revealing a deep path).</summary>
     public string? PendingSelectPath { get; set; }
@@ -130,6 +153,7 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
     private ColumnViewModel CreateColumn(string folder)
     {
         var col = new ColumnViewModel(folder, _sortKey, _descending);
+        col.Resized += OnColumnResized;
         col.PendingSelectionReady += c =>
         {
             if (c.PendingSelectPath is { } p)
@@ -139,6 +163,15 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
             }
         };
         return col;
+    }
+
+    /// <summary>Shift+drag resizes every column and makes that the width for new columns and tabs.</summary>
+    private void OnColumnResized(ColumnViewModel column, double width)
+    {
+        if (!Interop.WindowHelper.IsShiftDown()) return;
+        ListLayout.Instance.ColumnWidth = width;
+        foreach (var c in FolderColumns)
+            if (!ReferenceEquals(c, column)) c.SetWidth(width);
     }
 
     /// <summary>Called by the view when the selection in a column changes.</summary>

@@ -178,7 +178,7 @@
 
         <!-- One folder column -->
         <DataTemplate x:Key="FolderColumnTemplate" x:DataType="vm:ColumnViewModel">
-            <Grid Width="{x:Bind Layout.ColumnWidth, Mode=OneWay}" BorderThickness="0,0,1,0"
+            <Grid Width="{x:Bind Width, Mode=OneWay}" BorderThickness="0,0,1,0"
                   BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                 <ListView x:Name="ColumnList"
                           ItemsSource="{x:Bind Contents.Items, Mode=OneWay}"
@@ -200,8 +200,9 @@
                               VerticalAlignment="Top" Margin="0,24,0,0" IsHitTestVisible="False" />
                 <TextBlock Text="{x:Bind Contents.Error, Mode=OneWay}" Visibility="{x:Bind Contents.HasError, Mode=OneWay}"
                            TextWrapping="Wrap" Margin="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <toolkit:PropertySizer Binding="{x:Bind Layout.ColumnWidth, Mode=TwoWay}" HorizontalAlignment="Right"
-                                       Width="6" Minimum="140" Maximum="900" Background="Transparent" />
+                <toolkit:PropertySizer Binding="{x:Bind Width, Mode=TwoWay}" HorizontalAlignment="Right"
+                                       Width="6" Minimum="140" Maximum="900" Background="Transparent"
+                                       ToolTipService.ToolTip="Drag to resize this column. Shift+drag to resize all columns." />
             </Grid>
         </DataTemplate>
 
