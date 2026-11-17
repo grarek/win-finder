@@ -29,6 +29,13 @@ public static class UpdateChecker
         return Version.TryParse(s, out var v) ? Normalize(v) : null;
     }
 
+    /// <summary>How often a running app checks for a new release.</summary>
+    public static readonly TimeSpan CheckInterval = TimeSpan.FromHours(4);
+
+    /// <summary>True when the last check is older than <paramref name="interval"/> (or never happened).</summary>
+    public static bool IsCheckDue(DateTime? lastCheckUtc, DateTime nowUtc, TimeSpan interval) =>
+        lastCheckUtc is not { } last || nowUtc - last >= interval || last > nowUtc; // clock moved back: check
+
     /// <summary>Compares major.minor.build only (assembly versions carry a .0 revision).</summary>
     public static bool IsNewer(Version candidate, Version current) => Normalize(candidate) > Normalize(current);
 

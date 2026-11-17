@@ -55,6 +55,19 @@ public class UpdateCheckerTests
     }
 
     [Fact]
+    public void IsCheckDue_FollowsTheInterval()
+    {
+        var now = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc);
+        var interval = UpdateChecker.CheckInterval;
+        Assert.True(UpdateChecker.IsCheckDue(null, now, interval));                         // never checked
+        Assert.False(UpdateChecker.IsCheckDue(now.AddHours(-1), now, interval));            // checked recently
+        Assert.True(UpdateChecker.IsCheckDue(now - interval, now, interval));               // exactly due
+        Assert.True(UpdateChecker.IsCheckDue(now.AddDays(-2), now, interval));              // e.g. after sleep
+        Assert.True(UpdateChecker.IsCheckDue(now.AddHours(3), now, interval));              // clock moved back
+        Assert.Equal(TimeSpan.FromHours(4), interval);
+    }
+
+    [Fact]
     public void Parse_IgnoresDraftsAndPrereleases()
     {
         Assert.Null(UpdateChecker.Parse(LatestJson.Replace("\"prerelease\": false", "\"prerelease\": true")));

@@ -128,7 +128,7 @@ This publishes an optimized, self-contained build to `%LocalAppData%\Programs\Wi
 
 WinFinder updates itself from this repository's GitHub Releases.
 
-- **Automatic check:** Release builds check about 15 seconds after startup, at most once a day. Turn this off under **… → Check for Updates Automatically**.
+- **Automatic check:** Release builds check about 15 seconds after startup, then every 4 hours while WinFinder stays open (including after the PC wakes from sleep). Turn this off under **… → Check for Updates Automatically**.
 - **Manual check:** **… → Check for Updates…** checks now, in any build.
 - **When a newer version exists**, a bar appears under the toolbar with three options:
   - **Update and restart**: downloads the zip for your processor and closes WinFinder. A small helper then swaps the new files into the app folder and reopens WinFinder.

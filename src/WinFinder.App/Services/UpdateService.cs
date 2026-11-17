@@ -53,21 +53,42 @@ public sealed class UpdateService
         return http;
     }
 
-    /// <summary>Quiet daily check shortly after startup (Release builds only, respects the setting).</summary>
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _startupTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _periodicTimer;
+
+    /// <summary>The release tag already announced by a background check (so the bar isn't re-shown every few hours).</summary>
+    private string? _announcedTag;
+
+    /// <summary>
+    /// Background checks for Release builds: shortly after startup, then every
+    /// <see cref="UpdateChecker.CheckInterval"/> while the app stays open. A light timer looks every
+    /// 30 minutes whether a check is due, which also catches up after the PC wakes from sleep.
+    /// The "Check for Updates Automatically" setting is honoured on every tick.
+    /// </summary>
     public void StartBackgroundCheck()
     {
-        var s = AppServices.Settings.Current;
-        if (IsDevelopmentBuild || !s.AutoCheckForUpdates) return;
-        if (s.LastUpdateCheckUtc is { } last && DateTime.UtcNow - last < TimeSpan.FromHours(20)) return;
+        if (IsDevelopmentBuild || _periodicTimer is not null) return;
 
-        var timer = AppServices.Dispatcher.CreateTimer();
-        timer.Interval = TimeSpan.FromSeconds(15);
-        timer.IsRepeating = false;
-        timer.Tick += async (_, _) =>
-        {
-            try { await CheckAsync(manual: false); } catch { /* offline etc.: try again next launch */ }
-        };
-        timer.Start();
+        _startupTimer = AppServices.Dispatcher.CreateTimer();
+        _startupTimer.Interval = TimeSpan.FromSeconds(15);
+        _startupTimer.IsRepeating = false;
+        _startupTimer.Tick += async (_, _) => await CheckIfDueAsync();
+        _startupTimer.Start();
+
+        _periodicTimer = AppServices.Dispatcher.CreateTimer();
+        _periodicTimer.Interval = TimeSpan.FromMinutes(30);
+        _periodicTimer.IsRepeating = true;
+        _periodicTimer.Tick += async (_, _) => await CheckIfDueAsync();
+        _periodicTimer.Start();
+    }
+
+    private async Task CheckIfDueAsync()
+    {
+        var s = AppServices.Settings.Current;
+        if (!s.AutoCheckForUpdates) return;
+        if (!UpdateChecker.IsCheckDue(s.LastUpdateCheckUtc, DateTime.UtcNow, UpdateChecker.CheckInterval)) return;
+        try { await CheckAsync(manual: false); }
+        catch { /* offline etc.: the next tick tries again once the interval has passed */ }
     }
 
     /// <summary>
@@ -90,7 +111,13 @@ public sealed class UpdateService
             if (skipped && !manual) return latest;
 
             Available = latest;
-            UpdateAvailable?.Invoke(latest);
+            // Background checks announce each release once per session; a manual check always shows it.
+            bool alreadyAnnounced = string.Equals(_announcedTag, latest.Tag, StringComparison.OrdinalIgnoreCase);
+            if (manual || !alreadyAnnounced)
+            {
+                _announcedTag = latest.Tag;
+                UpdateAvailable?.Invoke(latest);
+            }
             return latest;
         }
         finally
