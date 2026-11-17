@@ -188,3 +188,7 @@ dotnet test tests/WinFinder.Core.Tests
 - Subfolders expanded inline in list view don't update live; they refresh when re-expanded or after a drop into them. The top-level listing is live.
 - The context menu can only cover items that share a folder. In search results that span several folders, it covers the selected items in the first item's folder.
 - The app runs unpackaged and isn't registered as the default folder handler, so Win+E still opens Explorer.
+
+## License
+
+[MIT](LICENSE)
