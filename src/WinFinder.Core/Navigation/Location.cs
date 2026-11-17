@@ -31,14 +31,30 @@ public sealed record Location(LocationKind Kind, string Path = "", int TagId = 0
         folder = PathUtil.Normalize(folder);
         if (recordedRoot is { Length: > 0 } && PathUtil.IsSameOrUnder(folder, recordedRoot) && Directory.Exists(recordedRoot))
             return PathUtil.Normalize(recordedRoot);
+        return DefaultColumnRoot(folder, home);
+    }
+
+    /// <summary>
+    /// Leftmost column when nothing better is known: the home folder for folders inside it,
+    /// otherwise the folder's drive (or share), so column view always shows the parents.
+    /// </summary>
+    public static string DefaultColumnRoot(string folder, string home)
+    {
+        folder = PathUtil.Normalize(folder);
         if (!string.IsNullOrEmpty(home) && PathUtil.IsSameOrUnder(folder, home))
             return PathUtil.Normalize(home);
         return System.IO.Path.GetPathRoot(folder) is { Length: > 0 } drive ? drive : folder;
     }
 
-    /// <summary>The leftmost column to use for this location: its recorded root, if still an ancestor; otherwise itself.</summary>
-    public string EffectiveColumnRoot =>
-        ColumnRoot is { } root && PathUtil.IsSameOrUnder(Path, root) ? root : Path;
+    /// <summary>
+    /// The leftmost column to use for this location: its recorded root while that's still an
+    /// ancestor; otherwise <see cref="DefaultColumnRoot"/>.
+    /// </summary>
+    public string ColumnRootFor(string home) =>
+        ColumnRoot is { } root && PathUtil.IsSameOrUnder(Path, root) ? root : DefaultColumnRoot(Path, home);
+
+    /// <inheritdoc cref="ColumnRootFor"/>
+    public string EffectiveColumnRoot => ColumnRootFor(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
     /// <summary>Compact string used for session persistence. Searches persist as their scope folder.</summary>
     public string Serialize() => Kind switch

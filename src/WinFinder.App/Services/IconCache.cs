@@ -8,7 +8,7 @@ namespace WinFinder.App.Services;
 
 /// <summary>
 /// LRU cache of shell icons/thumbnails as XAML image sources. Generic file-type icons are
-/// shared per extension; anything that can differ per file (exe, lnk, thumbnails) is keyed by
+/// shared per extension; folder icons are per folder; anything else that can differ per file (exe, lnk, thumbnails) is keyed by
 /// path + size + modified time. Must be used from the UI thread.
 /// </summary>
 public sealed class IconCache
@@ -30,7 +30,11 @@ public sealed class IconCache
     {
         if (mode == ThumbnailMode.Icon && !entry.IsDrive)
         {
-            if (entry.IsDirectory) return $"icon:<dir>:{pixelSize}";
+            // Folders can't share one icon: known folders (Documents, Downloads, 3D Objects...) and
+            // folders customized with desktop.ini each have their own, and a shared entry would show
+            // whichever loaded first on every folder. Keyed by path only, so a folder's icon isn't
+            // reloaded each time its contents (and so its modified time) change.
+            if (entry.IsDirectory) return $"icon:<dir>:{entry.FullPath.ToLowerInvariant()}:{pixelSize}";
             if (!PerFileIconExtensions.Contains(entry.Extension)) return $"icon:{entry.Extension.ToLowerInvariant()}:{pixelSize}";
         }
         return $"{mode}:{entry.FullPath}:{pixelSize}:{entry.Modified.Ticks}";

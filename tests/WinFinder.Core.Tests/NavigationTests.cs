@@ -159,15 +159,28 @@ public class LocationAndPathTests
     [Fact]
     public void ColumnRoot_IsKeptOnlyWhileItIsAnAncestor()
     {
+        const string home = @"C:\Users\Sam";
         var inside = Location.Folder(@"C:\Users\Sam\Documents") with { ColumnRoot = @"C:\Users" };
-        Assert.Equal(@"C:\Users", inside.EffectiveColumnRoot);
+        Assert.Equal(@"C:\Users", inside.ColumnRootFor(home));
 
-        var outside = Location.Folder(@"D:\Data") with { ColumnRoot = @"C:\Users" };
-        Assert.Equal(@"D:\Data", outside.EffectiveColumnRoot);
+        // Not an ancestor any more: falls back to the default, which still shows the parents.
+        var outside = Location.Folder(@"D:\Data\Projects") with { ColumnRoot = @"C:\Users" };
+        Assert.Equal(@"D:\", outside.ColumnRootFor(home));
 
-        Assert.Equal(@"C:\Users", Location.Folder(@"C:\Users").EffectiveColumnRoot);
         // The root doesn't change what counts as "the same place".
         Assert.True(inside.SameAs(Location.Folder(@"C:\Users\Sam\Documents")));
+    }
+
+    [Fact]
+    public void ColumnRoot_WithoutARecordedRoot_StillShowsTheParents()
+    {
+        // E.g. after switching from list view back to columns, or opening a folder from the sidebar.
+        const string home = @"C:\Users\Sam";
+        Assert.Equal(home, Location.Folder(@"C:\Users\Sam\Documents\Work").ColumnRootFor(home));
+        Assert.Equal(home, Location.Folder(home).ColumnRootFor(home));
+        Assert.Equal(@"C:\", Location.Folder(@"C:\Users").ColumnRootFor(home));
+        Assert.Equal(@"N:\", Location.Folder(@"N:\Movies\Film").ColumnRootFor(home));
+        Assert.Equal(@"\\server\share", Location.Folder(@"\\server\share\Team\Docs").ColumnRootFor(home));
     }
 
     [Fact]
