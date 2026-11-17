@@ -83,7 +83,7 @@ public sealed partial class SidebarView : UserControl
         if (item.Kind is SidebarKind.Favorite or SidebarKind.Drive)
         {
             var explorer = new MenuFlyoutItem { Text = "Open in File Explorer" };
-            explorer.Click += (_, _) => Core.Shell.ShellInfo.Open(item.Path);
+            explorer.Click += (_, _) => ExplorerReplacement.OpenInFileExplorer(item.Path, OwnerHwnd);
             menu.Items.Add(explorer);
         }
 

@@ -22,7 +22,15 @@ public sealed partial class ListLayout : ObservableObject
         SizeWidth = s.SizeColumnWidth;
         KindWidth = s.KindColumnWidth;
         IconSize = s.IconSize;
+        ColumnWidth = s.ColumnWidth;
     }
+
+    /// <summary>
+    /// Width of every folder column in column view. One value for all columns, folders, tabs and
+    /// windows, so widths stay put while browsing; resizing any column changes it.
+    /// </summary>
+    [ObservableProperty]
+    private double _columnWidth = 240;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NameGrid))]
@@ -55,4 +63,5 @@ public sealed partial class ListLayout : ObservableObject
     partial void OnSizeWidthChanged(double value) { AppServices.Settings.Current.SizeColumnWidth = value; AppServices.Settings.SaveSoon(); }
     partial void OnKindWidthChanged(double value) { AppServices.Settings.Current.KindColumnWidth = value; AppServices.Settings.SaveSoon(); }
     partial void OnIconSizeChanged(double value) { AppServices.Settings.Current.IconSize = value; AppServices.Settings.SaveSoon(); }
+    partial void OnColumnWidthChanged(double value) { AppServices.Settings.Current.ColumnWidth = value; AppServices.Settings.SaveSoon(); }
 }

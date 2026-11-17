@@ -37,6 +37,17 @@ public static class CommandLine
     {
         var args = Split(commandLine).ToList();
         if (args.Count > 0 && args[0].EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) args.RemoveAt(0);
-        return args.FirstOrDefault(a => a.Length > 0);
+        return args.Select(CleanPath).FirstOrDefault(a => a.Length > 0);
+    }
+
+    /// <summary>
+    /// Repairs a path argument. Explorer opens a drive with <c>"C:\"</c>, and Windows' argument
+    /// rules read <c>\"</c> as an escaped quote, giving <c>C:"</c>; this turns that back into <c>C:\</c>.
+    /// </summary>
+    public static string CleanPath(string arg)
+    {
+        string s = arg.Trim().Trim('"').Trim();
+        if (s.Length == 2 && s[1] == ':' && char.IsAsciiLetter(s[0])) s += "\\";
+        return s;
     }
 }

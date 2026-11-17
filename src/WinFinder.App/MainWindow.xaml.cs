@@ -73,7 +73,10 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         Activated += (_, e) =>
         {
             if (e.WindowActivationState != WindowActivationState.Deactivated)
+            {
                 AppServices.FileOps.OwnerWindow = Hwnd;
+                LastActivatedUtc = DateTime.UtcNow;
+            }
         };
         Root.Loaded += (_, _) =>
         {
@@ -108,6 +111,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
     public MainViewModel ViewModel { get; } = new();
     public ListLayout Layout => ListLayout.Instance;
     public IntPtr Hwnd { get; }
+    public DateTime LastActivatedUtc { get; private set; }
 
     public double SidebarWidth
     {
@@ -471,6 +475,9 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         var foldersFirst = new ToggleMenuFlyoutItem { Text = "Keep Folders on Top", IsChecked = AppServices.FoldersFirst };
         foldersFirst.Click += (_, _) => AppServices.FoldersFirst = foldersFirst.IsChecked;
         ActionsMenu.Items.Add(foldersFirst);
+        var replaceExplorer = new ToggleMenuFlyoutItem { Text = "Use Instead of File Explorer", IsChecked = ExplorerReplacement.IsEnabled };
+        replaceExplorer.Click += (_, _) => _ = SetReplaceExplorerAsync(replaceExplorer.IsChecked);
+        ActionsMenu.Items.Add(replaceExplorer);
 
         ActionsMenu.Items.Add(new MenuFlyoutSeparator());
         var undo = AppServices.FileOps.Undo.Peek();
@@ -485,6 +492,46 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         };
         ActionsMenu.Items.Add(autoUpdate);
         ActionsMenu.Items.Add(new MenuFlyoutItem { Text = $"WinFinder {UpdateService.Instance.CurrentVersionText}", IsEnabled = false });
+    }
+
+    /// <summary>Turns "Use Instead of File Explorer" on (after explaining what it does) or off.</summary>
+    private async Task SetReplaceExplorerAsync(bool enable)
+    {
+        if (!enable)
+        {
+            ExplorerReplacement.Disable();
+            return;
+        }
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            Title = "Use WinFinder instead of File Explorer?",
+            Content = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 440,
+                Text =
+                    "Folders and drives you open from the desktop, the Run box or other apps will open in WinFinder, and so will Win+E.\n\n" +
+                    "While WinFinder is running, File Explorer windows that other apps open (for example “Show in folder” after a download) " +
+                    "move into WinFinder, with the same files selected.\n\n" +
+                    "File Explorer still opens for This PC, Control Panel and the Recycle Bin, and from “Open in File Explorer”. " +
+                    "Turn this off here before deleting WinFinder; uninstalling it turns this off for you.",
+            },
+            PrimaryButtonText = "Use WinFinder",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (!ExplorerReplacement.Enable())
+        {
+            await new ContentDialog
+            {
+                XamlRoot = Root.XamlRoot,
+                Title = "Couldn’t make WinFinder the default",
+                Content = "Windows didn’t allow the change. Nothing was changed.",
+                CloseButtonText = "OK",
+            }.ShowAsync();
+        }
     }
 
     private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)

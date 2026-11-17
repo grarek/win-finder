@@ -67,6 +67,8 @@ SolidCompression=yes
 ; Close a running WinFinder (via Restart Manager) before replacing its files.
 CloseApplications=yes
 RestartApplications=no
+; Tells Explorer to re-read folder handlers after uninstalling (see RemoveFolderHandler).
+ChangesAssociations=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -105,11 +107,51 @@ begin
   Result := True;
 end;
 
+// "Use Instead of File Explorer" points folders, drives and Win+E at WinFinder.exe. If that is
+// this copy, hand them back to File Explorer; otherwise folders would stop opening.
+procedure RemoveFolderHandler(Dir: String);
+var
+  I: Integer;
+  Key, Value, Previous: String;
+  Classes: array[0..1] of String;
+begin
+  Dir := Lowercase(Dir + '\');
+  Classes[0] := 'Directory';
+  Classes[1] := 'Drive';
+  for I := 0 to 1 do
+  begin
+    Key := 'Software\Classes\' + Classes[I] + '\shell';
+    if RegQueryStringValue(HKCU, Key + '\WinFinder\command', '', Value) and (Pos(Dir, Lowercase(Value)) > 0) then
+    begin
+      if not RegQueryStringValue(HKCU, Key + '\WinFinder', 'WinFinderPreviousDefault', Previous) then
+        Previous := '';
+      if RegQueryStringValue(HKCU, Key, '', Value) and (Value = 'WinFinder') then
+      begin
+        if Previous <> '' then
+          RegWriteStringValue(HKCU, Key, '', Previous)
+        else
+          RegDeleteValue(HKCU, Key, '');
+      end;
+      RegDeleteKeyIncludingSubkeys(HKCU, Key + '\WinFinder');
+    end;
+  end;
+
+  Key := 'Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}';
+  if RegQueryStringValue(HKCU, Key + '\shell\opennewwindow\command', '', Value) and (Pos(Dir, Lowercase(Value)) > 0) then
+  begin
+    RegDeleteKeyIncludingSubkeys(HKCU, Key + '\shell\opennewwindow');
+    RegDeleteKeyIfEmpty(HKCU, Key + '\shell');
+    RegDeleteKeyIfEmpty(HKCU, Key);
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Dir, Data: String;
 begin
   if CurUninstallStep <> usPostUninstall then Exit;
+
+  RemoveFolderHandler(RemoveBackslashUnlessRoot(ExpandConstant('{app}')));
 
   // In-app updates replace the whole folder, so it can hold files this uninstaller never
   // recorded. Remove the rest, but only when the folder is clearly WinFinder's own.

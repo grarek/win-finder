@@ -97,6 +97,7 @@ public static class AppServices
     {
         if (_shutDown) return; // may be reached from both an update-exit and the last window closing
         _shutDown = true;
+        ExplorerReplacement.Shutdown();
         Settings.Save();
         FileOps.Dispose();
         Thumbnails.Dispose();

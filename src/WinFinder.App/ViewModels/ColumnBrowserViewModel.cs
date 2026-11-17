@@ -11,37 +11,23 @@ namespace WinFinder.App.ViewModels;
 /// <summary>One folder column in column view.</summary>
 public sealed partial class ColumnViewModel : ObservableObject, IDisposable
 {
-    private readonly ColumnBrowserViewModel _owner;
-
-    public ColumnViewModel(ColumnBrowserViewModel owner, string folder, SortKey key, bool descending)
+    public ColumnViewModel(string folder, SortKey key, bool descending)
     {
-        _owner = owner;
         Folder = folder;
         Contents = new FolderContents(Location.Folder(folder), key, descending);
-        _width = AppServices.Settings.Current.ColumnWidths.TryGetValue(folder, out var w)
-            ? w : AppServices.Settings.Current.ColumnWidth;
         Contents.Loaded += () => PendingSelectionReady?.Invoke(this);
     }
 
     public string Folder { get; }
     public FolderContents Contents { get; }
 
+    /// <summary>Shared column width (the same for every column; see <see cref="ListLayout.ColumnWidth"/>).</summary>
+    public ListLayout Layout => ListLayout.Instance;
+
     /// <summary>Item to select once loaded (used when revealing a deep path).</summary>
     public string? PendingSelectPath { get; set; }
 
     public event Action<ColumnViewModel>? PendingSelectionReady;
-
-    [ObservableProperty]
-    private double _width;
-
-    /// <summary>Set while applying a width to every column, to avoid feedback loops.</summary>
-    internal bool SuppressWidthPropagation { get; set; }
-
-    partial void OnWidthChanged(double value)
-    {
-        if (SuppressWidthPropagation) return;
-        _owner.OnColumnResized(this, value);
-    }
 
     public void Dispose() => Contents.Dispose();
 }
@@ -101,7 +87,7 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
     /// <summary>The folder commands such as New Folder and Paste act on.</summary>
     public string? ActiveFolder => ActiveColumn?.Folder ?? _chain?.Root;
 
-    /// <summary>Deepest selected path (file or folder) — shown in the path bar.</summary>
+    /// <summary>Deepest selected path (file or folder) â€” shown in the path bar.</summary>
     public string? SelectedPath => _chain?.PreviewFile ?? (_chain is { Folders.Count: > 1 } ? _chain.Deepest : null);
 
     public IEnumerable<ColumnViewModel> FolderColumns => Columns.OfType<ColumnViewModel>();
@@ -143,7 +129,7 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
 
     private ColumnViewModel CreateColumn(string folder)
     {
-        var col = new ColumnViewModel(this, folder, _sortKey, _descending);
+        var col = new ColumnViewModel(folder, _sortKey, _descending);
         col.PendingSelectionReady += c =>
         {
             if (c.PendingSelectPath is { } p)
@@ -216,31 +202,6 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
     {
         ActiveColumn = column;
         OnPropertyChanged(nameof(ActiveFolder));
-    }
-
-    internal void OnColumnResized(ColumnViewModel column, double width)
-    {
-        var s = AppServices.Settings.Current;
-        bool shift = Interop.WindowHelper.IsShiftDown();
-        if (shift)
-        {
-            // Shift+drag resizes every column (and becomes the default).
-            s.ColumnWidth = width;
-            foreach (var c in FolderColumns)
-            {
-                if (ReferenceEquals(c, column)) continue;
-                c.SuppressWidthPropagation = true;
-                c.Width = width;
-                c.SuppressWidthPropagation = false;
-                s.ColumnWidths.Remove(c.Folder);
-            }
-            s.ColumnWidths.Remove(column.Folder);
-        }
-        else
-        {
-            s.ColumnWidths[column.Folder] = width;
-        }
-        AppServices.Settings.SaveSoon();
     }
 
     public void Clear()

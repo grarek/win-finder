@@ -10,6 +10,36 @@
     >
 
     <UserControl.Resources>
+        <ResourceDictionary>
+        <!-- Finder-style selection: selected rows are filled with the Windows accent color (blue by
+             default) with white text, instead of WinUI's faint gray and side pill. -->
+        <ResourceDictionary.ThemeDictionaries>
+            <ResourceDictionary x:Key="Light">
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColor}" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorDark1}" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorDark2}" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="White" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelectedPointerOver" Color="White" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelectedPressed" Color="White" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColor}" Opacity="0.28" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColor}" Opacity="0.36" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColor}" Opacity="0.44" />
+            </ResourceDictionary>
+            <ResourceDictionary x:Key="Dark">
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColor}" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColorLight1}" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColorDark1}" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="White" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelectedPointerOver" Color="White" />
+                <SolidColorBrush x:Key="ListViewItemForegroundSelectedPressed" Color="White" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource SystemAccentColor}" Opacity="0.35" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource SystemAccentColor}" Opacity="0.45" />
+                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource SystemAccentColor}" Opacity="0.55" />
+            </ResourceDictionary>
+            <!-- HighContrast keeps the system highlight colors. -->
+        </ResourceDictionary.ThemeDictionaries>
+        <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+
         <Style x:Key="CompactListItem" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
             <Setter Property="MinHeight" Value="26" />
             <Setter Property="Padding" Value="8,0,8,0" />
@@ -22,8 +52,9 @@
             <Setter Property="VerticalContentAlignment" Value="Top" />
         </Style>
 
+        <!-- Dimmed by opacity rather than a fixed gray, so it turns white with the row when selected. -->
         <Style x:Key="SecondaryText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Opacity" Value="0.7" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="Margin" Value="0,0,8,0" />
@@ -77,7 +108,8 @@
                     </Button>
                     <Image Grid.Column="2" Width="16" Height="16" Source="{x:Bind Icon, Mode=OneWay}" />
                     <TextBlock Grid.Column="3" Text="{x:Bind Name, Mode=OneWay}" TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}" />
+                               HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}"
+                               PointerPressed="ItemName_PointerPressed" Tapped="ItemName_Tapped" />
                     <TextBox Grid.Column="3" x:Name="RenameBox" x:Load="{x:Bind IsRenaming, Mode=OneWay}"
                              Text="{x:Bind RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              Padding="4,1,4,1" MinHeight="22" VerticalAlignment="Center"
@@ -105,7 +137,9 @@
                        Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
                 <Grid>
                     <TextBlock Text="{x:Bind Name, Mode=OneWay}" TextAlignment="Center" TextWrapping="Wrap" MaxLines="2"
-                               TextTrimming="CharacterEllipsis" FontSize="12" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}" />
+                               TextTrimming="CharacterEllipsis" FontSize="12" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}"
+                               HorizontalAlignment="Center"
+                               PointerPressed="ItemName_PointerPressed" Tapped="ItemName_Tapped" />
                     <TextBox x:Name="RenameBox" x:Load="{x:Bind IsRenaming, Mode=OneWay}" TextAlignment="Center" TextWrapping="Wrap"
                              Text="{x:Bind RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
                              Loaded="RenameBox_Loaded" KeyDown="RenameBox_KeyDown" LostFocus="RenameBox_LostFocus" />
@@ -130,21 +164,21 @@
                            Visibility="{x:Bind IsDropTarget, Mode=OneWay}" />
                 <Image Width="16" Height="16" Source="{x:Bind Icon, Mode=OneWay}" />
                 <TextBlock Grid.Column="1" Text="{x:Bind Name, Mode=OneWay}" TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}" />
+                           HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="{x:Bind IsNotRenaming, Mode=OneWay}"
+                           PointerPressed="ItemName_PointerPressed" Tapped="ItemName_Tapped" />
                 <TextBox Grid.Column="1" x:Name="RenameBox" x:Load="{x:Bind IsRenaming, Mode=OneWay}"
                          Text="{x:Bind RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Padding="4,1,4,1" MinHeight="22" VerticalAlignment="Center"
                          Loaded="RenameBox_Loaded" KeyDown="RenameBox_KeyDown" LostFocus="RenameBox_LostFocus" />
                 <ItemsControl Grid.Column="2" ItemsSource="{x:Bind TagBrushes, Mode=OneWay}" VerticalAlignment="Center"
                               ItemTemplate="{StaticResource TagDotTemplate}" ItemsPanel="{StaticResource HorizontalPanel}" IsTabStop="False" />
-                <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontSize="9" Visibility="{x:Bind IsFolder}"
-                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <FontIcon Grid.Column="3" Glyph="&#xE76C;" FontSize="9" Visibility="{x:Bind IsFolder}" Opacity="0.7" />
             </Grid>
         </DataTemplate>
 
         <!-- One folder column -->
         <DataTemplate x:Key="FolderColumnTemplate" x:DataType="vm:ColumnViewModel">
-            <Grid Width="{x:Bind Width, Mode=OneWay}" BorderThickness="0,0,1,0"
+            <Grid Width="{x:Bind Layout.ColumnWidth, Mode=OneWay}" BorderThickness="0,0,1,0"
                   BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                 <ListView x:Name="ColumnList"
                           ItemsSource="{x:Bind Contents.Items, Mode=OneWay}"
@@ -166,7 +200,7 @@
                               VerticalAlignment="Top" Margin="0,24,0,0" IsHitTestVisible="False" />
                 <TextBlock Text="{x:Bind Contents.Error, Mode=OneWay}" Visibility="{x:Bind Contents.HasError, Mode=OneWay}"
                            TextWrapping="Wrap" Margin="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <toolkit:PropertySizer Binding="{x:Bind Width, Mode=TwoWay}" HorizontalAlignment="Right"
+                <toolkit:PropertySizer Binding="{x:Bind Layout.ColumnWidth, Mode=TwoWay}" HorizontalAlignment="Right"
                                        Width="6" Minimum="140" Maximum="900" Background="Transparent" />
             </Grid>
         </DataTemplate>
@@ -205,6 +239,7 @@
         <views:ColumnTemplateSelector x:Key="ColumnSelector"
                                       Folder="{StaticResource FolderColumnTemplate}"
                                       Preview="{StaticResource PreviewColumnTemplate}" />
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid>

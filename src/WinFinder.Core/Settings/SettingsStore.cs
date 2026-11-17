@@ -53,8 +53,10 @@ public sealed class AppSettings
     public double SizeColumnWidth { get; set; } = 90;
     public double KindColumnWidth { get; set; } = 150;
     public Dictionary<string, FolderViewState> Folders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, double> ColumnWidths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public SessionState? Session { get; set; }
+
+    /// <summary>"Use WinFinder instead of File Explorer" (folders, Win+E, Explorer windows other apps open).</summary>
+    public bool ReplaceExplorer { get; set; }
 
     // Updates
     public bool AutoCheckForUpdates { get; set; } = true;
@@ -105,7 +107,6 @@ public sealed class SettingsStore
                 if (s is not null)
                 {
                     s.Folders = new Dictionary<string, FolderViewState>(s.Folders, StringComparer.OrdinalIgnoreCase);
-                    s.ColumnWidths = new Dictionary<string, double>(s.ColumnWidths, StringComparer.OrdinalIgnoreCase);
                     return s;
                 }
             }
