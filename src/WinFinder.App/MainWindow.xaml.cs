@@ -68,6 +68,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         TransferService.CutChanged += OnCutChanged;
         UpdateService.Instance.UpdateAvailable += ShowUpdate;
         if (UpdateService.Instance.Available is { } pending) ShowUpdate(pending);
+        else if (UpdateService.Instance.TakeLastResult() is { } lastResult) ShowUpdateResult(lastResult);
 
         Activated += (_, e) =>
         {
@@ -495,9 +496,36 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
 
     private Core.Updates.ReleaseInfo? _offeredUpdate;
 
+    /// <summary>After an update restart: say whether it worked (instead of silently reopening).</summary>
+    private void ShowUpdateResult(Core.Updates.UpdateResult result)
+    {
+        _offeredUpdate = null;
+        UpdateNowButton.Visibility = Visibility.Collapsed;
+        WhatsNewLink.Visibility = Visibility.Collapsed;
+        SkipVersionLink.Visibility = Visibility.Collapsed;
+        UpdateProgress.Visibility = Visibility.Collapsed;
+        UpdateBar.IsClosable = true;
+        if (result.Succeeded)
+        {
+            UpdateBar.Severity = InfoBarSeverity.Success;
+            UpdateBar.Title = "Updated";
+            UpdateBar.Message = $"WinFinder is now version {UpdateService.Instance.CurrentVersionText}.";
+        }
+        else
+        {
+            UpdateBar.Severity = InfoBarSeverity.Error;
+            UpdateBar.Title = "Update didn't install";
+            UpdateBar.Message = $"WinFinder {result.Version} couldn't be installed, so you're still on " +
+                $"{UpdateService.Instance.CurrentVersionText}. {result.Message} Close other programs using the WinFinder folder and try again (details in update.log).";
+        }
+        UpdateBar.IsOpen = true;
+    }
+
     private void ShowUpdate(Core.Updates.ReleaseInfo release)
     {
         _offeredUpdate = release;
+        UpdateNowButton.Visibility = Visibility.Visible;
+        WhatsNewLink.Visibility = Visibility.Visible;
         UpdateBar.Title = "Update available";
         UpdateBar.Message = $"WinFinder {release.Version.ToString(3)} is available (you have {UpdateService.Instance.CurrentVersionText}).";
         UpdateBar.Severity = InfoBarSeverity.Informational;

@@ -36,6 +36,14 @@ public partial class App : Application
 
         var cmdArgs = Environment.GetCommandLineArgs();
         string? startPath = cmdArgs.Length > 1 ? cmdArgs[1] : null;
+        // Resolve a relative path argument first, then move the working folder off the install
+        // folder (shortcuts often start apps there), so nothing we launch keeps it busy and an
+        // update can rename it.
+        if (startPath is { Length: > 0 } && !startPath.Contains('%') && !startPath.StartsWith('~'))
+        {
+            try { startPath = Path.GetFullPath(startPath); } catch { }
+        }
+        try { Environment.CurrentDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile); } catch { }
         WindowManager.Start(startPath);
         StartupTrace.Mark("window created + activated");
         UpdateService.Instance.StartBackgroundCheck();

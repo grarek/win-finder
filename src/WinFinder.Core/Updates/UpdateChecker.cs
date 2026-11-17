@@ -6,6 +6,22 @@ namespace WinFinder.Core.Updates;
 
 public sealed record ReleaseAsset(string Name, string DownloadUrl, long Size);
 
+/// <summary>What the update helper reports after it runs (written to update-result.txt).</summary>
+public sealed record UpdateResult(bool Succeeded, string Version, string Message)
+{
+    /// <summary>Lines: "ok" or "failed", then the version, then (on failure) the reason.</summary>
+    public static UpdateResult? Parse(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var lines = text.Replace("\r", "").Split('\n');
+        string status = lines[0].Trim().TrimStart('﻿');
+        if (status is not ("ok" or "failed")) return null;
+        string version = lines.Length > 1 ? lines[1].Trim() : "";
+        string message = lines.Length > 2 ? string.Join(" ", lines.Skip(2).Select(l => l.Trim()).Where(l => l.Length > 0)) : "";
+        return new UpdateResult(status == "ok", version, message);
+    }
+}
+
 public sealed record ReleaseInfo(Version Version, string Tag, string Name, string HtmlUrl, IReadOnlyList<ReleaseAsset> Assets)
 {
     /// <summary>The zip built for this machine's architecture (named <c>*-win-x64.zip</c> / <c>*-win-arm64.zip</c>).</summary>

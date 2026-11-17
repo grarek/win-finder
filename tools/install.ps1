@@ -34,7 +34,9 @@ if (-not $NoShortcut) {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($lnk)
     $shortcut.TargetPath = $exe
-    $shortcut.WorkingDirectory = $Destination
+    # Start in the user's folder, not the install folder: a running program's working folder can't be
+    # renamed, and the in-app updater swaps the install folder by renaming it.
+    $shortcut.WorkingDirectory = $env:USERPROFILE
     $shortcut.IconLocation = "$exe,0"
     $shortcut.Description = "WinFinder - a Finder-style file manager"
     $shortcut.Save()
