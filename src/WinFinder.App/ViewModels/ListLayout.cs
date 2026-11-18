@@ -26,11 +26,36 @@ public sealed partial class ListLayout : ObservableObject
     }
 
     /// <summary>
-    /// Width of every folder column in column view. One value for all columns, folders, tabs and
-    /// windows, so widths stay put while browsing; resizing any column changes it.
+    /// Default width of folder columns in column view (Shift+drag sets it). Folders the user
+    /// resized on their own keep their width; see <see cref="ColumnWidthFor"/>.
     /// </summary>
     [ObservableProperty]
     private double _columnWidth = 240;
+
+    private const int MaxRememberedColumnWidths = 2000;
+
+    /// <summary>The width a column showing <paramref name="folder"/> opens at.</summary>
+    public double ColumnWidthFor(string folder) =>
+        AppServices.Settings.Current.FolderColumnWidths.TryGetValue(folder, out var w) && w > 0 ? w : ColumnWidth;
+
+    /// <summary>Remembers a width the user dragged for one folder's column.</summary>
+    public void RememberColumnWidth(string folder, double width)
+    {
+        var widths = AppServices.Settings.Current.FolderColumnWidths;
+        widths[folder] = width;
+        if (widths.Count > MaxRememberedColumnWidths)
+            foreach (var key in widths.Keys.Where(k => !string.Equals(k, folder, StringComparison.OrdinalIgnoreCase))
+                                           .Take(widths.Count - MaxRememberedColumnWidths).ToList())
+                widths.Remove(key);
+        AppServices.Settings.SaveSoon();
+    }
+
+    /// <summary>Drops a folder's own width so its column follows <see cref="ColumnWidth"/> again.</summary>
+    public void ForgetColumnWidth(string folder)
+    {
+        if (AppServices.Settings.Current.FolderColumnWidths.Remove(folder))
+            AppServices.Settings.SaveSoon();
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NameGrid))]

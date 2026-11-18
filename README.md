@@ -15,7 +15,7 @@ A Windows file manager that works like macOS Finder. It's built with C#, .NET 8 
 - **Path bar**:
   - Clicking a folder inside the current columns keeps them.
   - Clicking a folder above the leftmost column rebuilds the columns from the drive down, so its parents still show.
-- Columns open at one shared width in every folder, tab and window. Drag a column's edge to resize just that column; Shift+drag resizes all of them and makes that the remembered width for new columns.
+- Columns open at one shared width in every folder, tab and window. Drag a column's edge to resize just that column; the width is remembered for that folder and comes back the next time you open it. Shift+drag resizes all of them and makes that the default width for new columns.
 
 ### Quick Look (Space)
 - Previews:
