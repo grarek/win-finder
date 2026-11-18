@@ -47,6 +47,8 @@ public sealed class AppSettings
     public ViewMode DefaultView { get; set; } = ViewMode.List;
     public double IconSize { get; set; } = 96;
     public double ColumnWidth { get; set; } = 240;
+    /// <summary>Column view: widths the user dragged for specific folders (folder path → width).</summary>
+    public Dictionary<string, double> FolderColumnWidths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public double SidebarWidth { get; set; } = 210;
     public double NameColumnWidth { get; set; } = 320;
     public double DateColumnWidth { get; set; } = 200;
@@ -107,6 +109,7 @@ public sealed class SettingsStore
                 if (s is not null)
                 {
                     s.Folders = new Dictionary<string, FolderViewState>(s.Folders, StringComparer.OrdinalIgnoreCase);
+                    s.FolderColumnWidths = new Dictionary<string, double>(s.FolderColumnWidths ?? new(), StringComparer.OrdinalIgnoreCase);
                     return s;
                 }
             }

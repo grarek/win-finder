@@ -16,15 +16,16 @@ public sealed partial class ColumnViewModel : ObservableObject, IDisposable
         Folder = folder;
         Contents = new FolderContents(Location.Folder(folder), key, descending);
         Contents.Loaded += () => PendingSelectionReady?.Invoke(this);
-        _width = ListLayout.Instance.ColumnWidth;
+        _width = ListLayout.Instance.ColumnWidthFor(folder);
     }
 
     public string Folder { get; }
     public FolderContents Contents { get; }
 
     /// <summary>
-    /// This column's width. New columns start at <see cref="ListLayout.ColumnWidth"/>; dragging a
-    /// column's edge resizes only that column, and Shift+drag resizes all of them (and sets the default).
+    /// This column's width. Columns open at the width last dragged for their folder, or else at
+    /// <see cref="ListLayout.ColumnWidth"/>. Dragging a column's edge resizes only that column (and
+    /// is remembered for its folder); Shift+drag resizes all of them and sets the default.
     /// </summary>
     [ObservableProperty]
     private double _width;
@@ -165,13 +166,24 @@ public sealed partial class ColumnBrowserViewModel : ObservableObject, IDisposab
         return col;
     }
 
-    /// <summary>Shift+drag resizes every column and makes that the width for new columns and tabs.</summary>
+    /// <summary>
+    /// A plain drag remembers the width for that column's folder. Shift+drag resizes every open
+    /// column and makes that the default width (the open columns' folders follow the default again).
+    /// </summary>
     private void OnColumnResized(ColumnViewModel column, double width)
     {
-        if (!Interop.WindowHelper.IsShiftDown()) return;
-        ListLayout.Instance.ColumnWidth = width;
+        var layout = ListLayout.Instance;
+        if (!Interop.WindowHelper.IsShiftDown())
+        {
+            layout.RememberColumnWidth(column.Folder, width);
+            return;
+        }
+        layout.ColumnWidth = width;
         foreach (var c in FolderColumns)
+        {
+            layout.ForgetColumnWidth(c.Folder);
             if (!ReferenceEquals(c, column)) c.SetWidth(width);
+        }
     }
 
     /// <summary>Called by the view when the selection in a column changes.</summary>
