@@ -120,31 +120,17 @@ public static class TransferService
         });
     }
 
-    /// <summary>Explorer's rule: same drive moves, different drive copies; Ctrl forces copy, Shift forces move.</summary>
-    public static DataPackageOperation DecideOperation(IReadOnlyList<string> sources, string destination, DataPackageOperation allowed)
+    /// <summary>
+    /// What dropping <paramref name="sources"/> into <paramref name="destination"/> does, or None when
+    /// it can't be dropped there. Uses the operations the drag source allows (not the DataView's
+    /// RequestedOperation, which only Explorer and the clipboard fill in; browsers leave it empty).
+    /// </summary>
+    private static DataPackageOperation DecideDrop(DragEventArgs e, IReadOnlyList<string> sources, string destination)
     {
-        DataPackageOperation op;
-        if (WindowHelper.IsCtrlDown()) op = DataPackageOperation.Copy;
-        else if (WindowHelper.IsShiftDown()) op = DataPackageOperation.Move;
-        else
-        {
-            string? destRoot = Path.GetPathRoot(destination);
-            bool sameDrive = sources.Count > 0 && sources.All(s => string.Equals(Path.GetPathRoot(s), destRoot, StringComparison.OrdinalIgnoreCase));
-            op = sameDrive ? DataPackageOperation.Move : DataPackageOperation.Copy;
-        }
-        if (!allowed.HasFlag(op)) op = allowed.HasFlag(DataPackageOperation.Copy) ? DataPackageOperation.Copy : allowed;
-        return op;
-    }
-
-    /// <summary>True when the drop would be a no-op or invalid (into itself, or into its current folder for a move).</summary>
-    public static bool IsInvalidTarget(IReadOnlyList<string> sources, string destination, DataPackageOperation op)
-    {
-        if (sources.Count == 0) return true;
-        if (sources.Any(s => PathUtil.IsSameOrUnder(destination, s))) return true;
-        if (op == DataPackageOperation.Move &&
-            sources.All(s => string.Equals(PathUtil.Parent(s), PathUtil.Normalize(destination), StringComparison.OrdinalIgnoreCase)))
-            return true;
-        return false;
+        var effect = DropRules.Decide(sources, destination, (DropEffect)(int)e.AllowedOperations,
+            WindowHelper.IsCtrlDown(), WindowHelper.IsShiftDown());
+        if (DropRules.IsInvalidTarget(sources, destination, effect)) effect = DropEffect.None;
+        return (DataPackageOperation)(int)effect;
     }
 
     // DragOver fires continuously; cache the source paths for the current drag.
@@ -168,8 +154,7 @@ public static class TransferService
         try
         {
             var paths = await GetDragPathsCachedAsync(e.DataView);
-            var op = DecideOperation(paths, destination, e.DataView.RequestedOperation);
-            if (IsInvalidTarget(paths, destination, op)) op = DataPackageOperation.None;
+            var op = DecideDrop(e, paths, destination);
             e.AcceptedOperation = op;
             string name = Path.GetFileName(destination.TrimEnd('\\'));
             if (name.Length == 0) name = destination;
@@ -193,8 +178,8 @@ public static class TransferService
         try
         {
             paths = await GetPathsAsync(e.DataView);
-            op = DecideOperation(paths, destination, e.DataView.RequestedOperation);
-            if (IsInvalidTarget(paths, destination, op)) return Array.Empty<string>();
+            op = DecideDrop(e, paths, destination);
+            if (op == DataPackageOperation.None) return Array.Empty<string>();
             e.AcceptedOperation = op;
         }
         finally
