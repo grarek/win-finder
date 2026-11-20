@@ -55,6 +55,34 @@ public static class WindowHelper
 
     public static IntPtr GetHwnd(Window window) => WinRT.Interop.WindowNative.GetWindowHandle(window);
 
+    // Undocumented but stable uxtheme exports (by ordinal) that Explorer, Notepad and Paint use for
+    // dark Win32 menus. Ordinal 135 is SetPreferredAppMode on Windows 10 1903 and later.
+    [DllImport("uxtheme.dll", EntryPoint = "#133")]
+    private static extern bool AllowDarkModeForWindow(IntPtr hwnd, bool allow);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135")]
+    private static extern int SetPreferredAppMode(int mode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#136")]
+    private static extern void FlushMenuThemes();
+
+    private static bool? _darkMenus;
+
+    /// <summary>Makes native popup menus (the shell context menu) dark or light to match the app, like Explorer's.</summary>
+    public static void UseDarkMenus(IntPtr hwnd, bool dark)
+    {
+        if (_darkMenus == dark) return;
+        try
+        {
+            const int ForceDark = 2, ForceLight = 3;
+            AllowDarkModeForWindow(hwnd, dark);
+            SetPreferredAppMode(dark ? ForceDark : ForceLight);
+            FlushMenuThemes();
+            _darkMenus = dark;
+        }
+        catch { _darkMenus = dark; } // not available on this Windows build: menus stay light
+    }
+
     /// <summary>Forwards menu messages to the active shell context menu (needed for "Send to", "Open with").</summary>
     public static void InstallShellMenuHook(IntPtr hwnd) => SetWindowSubclass(hwnd, MenuProc, (UIntPtr)0x5746, IntPtr.Zero);
 

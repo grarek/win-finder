@@ -853,9 +853,47 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
 
     private async Task PasteAsync(BrowserTabViewModel tab)
     {
-        if (tab.CurrentFolder is not { } folder) return;
+        if (tab.CurrentFolder is { } folder) await PasteIntoAsync(tab, folder);
+    }
+
+    /// <summary>Pastes into <paramref name="folder"/> (the current folder, or a folder that was right-clicked).</summary>
+    private async Task PasteIntoAsync(BrowserTabViewModel tab, string folder)
+    {
         var created = await TransferService.PasteAsync(folder, Hwnd);
-        if (created.Count > 0) tab.RevealNewItems(created);
+        RevealIfHere(tab, folder, created);
+    }
+
+    /// <summary>Explorer's "Paste shortcut": a .lnk for each copied or cut item.</summary>
+    private async Task PasteShortcutsAsync(BrowserTabViewModel tab, string folder)
+    {
+        var targets = await TransferService.GetClipboardPathsAsync();
+        if (targets.Count == 0) return;
+        var created = Shortcuts.Create(targets, folder);
+        if (created.Count < targets.Count)
+            await Dialogs.ShowMessageAsync(Root.XamlRoot, "Couldn't create every shortcut",
+                $"{targets.Count - created.Count} of {targets.Count} shortcuts couldn't be created in \u201C{Path.GetFileName(folder.TrimEnd('\\'))}\u201D.");
+        RevealIfHere(tab, folder, created);
+    }
+
+    private async Task CompressAsync(BrowserTabViewModel tab, IReadOnlyList<string> paths, ArchiveFormat format)
+    {
+        string? folder = PathUtil.Parent(paths[0]);
+        try
+        {
+            var archive = await Compressor.CompressAsync(paths, format);
+            if (folder is not null) RevealIfHere(tab, folder, [archive]);
+        }
+        catch (Exception ex)
+        {
+            await Dialogs.ShowMessageAsync(Root.XamlRoot, "Couldn't compress", ex.Message);
+        }
+    }
+
+    private static void RevealIfHere(BrowserTabViewModel tab, string folder, IReadOnlyList<string> created)
+    {
+        if (created.Count > 0 && tab.CurrentFolder is { } current &&
+            string.Equals(PathUtil.Normalize(current), PathUtil.Normalize(folder), StringComparison.OrdinalIgnoreCase))
+            tab.RevealNewItems(created);
     }
 
     private async Task GoToFolderAsync()
@@ -915,6 +953,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         var (x, y) = WindowHelper.ToScreen(Hwnd, position, Root.XamlRoot.RasterizationScale);
         bool extended = WindowHelper.IsShiftDown();
         AppServices.FileOps.OwnerWindow = Hwnd;
+        WindowHelper.UseDarkMenus(Hwnd, Root.ActualTheme == ElementTheme.Dark);
 
         if (items is { Count: > 0 })
         {
@@ -924,7 +963,11 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             var have = real.Select(i => AppServices.TagStore.GetTagIds(i.Path).ToHashSet()).ToList();
 
             var extras = new List<MenuExtra>();
-            if (items.All(i => i.IsFolder)) extras.Add(new MenuExtra(1, items.Count == 1 ? "Open in New Tab" : "Open in New Tabs"));
+            if (items.All(i => i.IsFolder))
+            {
+                extras.Add(new MenuExtra(1, items.Count == 1 ? "Open in New Tab" : "Open in New Tabs") { UnlessShellHas = ["opennewtab"] });
+                extras.Add(new MenuExtra(7, items.Count == 1 ? "Open in New Window" : "Open in New Windows") { UnlessShellHas = ["opennewwindow"] });
+            }
             extras.Add(new MenuExtra(2, "Quick Look"));
             extras.Add(new MenuExtra(3, "Get Info"));
             if (real.Count > 0)
@@ -942,10 +985,28 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             }
             if (tab.ShowWhereColumn) extras.Add(new MenuExtra(5, "Show in Enclosing Folder"));
 
+            // Windows 11's "Compress to" (the classic menu only has Send to > Compressed folder).
+            bool canCompress = real.Count == items.Count &&
+                real.Select(i => PathUtil.Parent(i.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+            if (canCompress)
+            {
+                extras.Add(new MenuExtra(0, "Compress to", [
+                    new MenuExtra(40, "ZIP File"),
+                    new MenuExtra(41, "7z File", Enabled: Compressor.IsAvailable(ArchiveFormat.SevenZip)),
+                    new MenuExtra(42, "TAR File", Enabled: Compressor.IsAvailable(ArchiveFormat.Tar)),
+                ]));
+            }
+
             var result = ShellContextMenu.ShowForItems(Hwnd, paths, x, y, extras, verb => InterceptVerb(verb, tab, items), extended);
             switch (result.ExtraId)
             {
                 case 1: OpenItems(tab, items, newTab: true); break;
+                case 7:
+                    foreach (var f in items.Where(i => i.IsFolder).Take(20)) WindowManager.CreateWindow(Location.Folder(f.Path), tab.ViewMode);
+                    break;
+                case 40: _ = CompressAsync(tab, paths, ArchiveFormat.Zip); break;
+                case 41: _ = CompressAsync(tab, paths, ArchiveFormat.SevenZip); break;
+                case 42: _ = CompressAsync(tab, paths, ArchiveFormat.Tar); break;
                 case 2: _ = QuickLook.ShowAsync(items[0]); break;
                 case 3: _ = Dialogs.ShowGetInfoAsync(Root.XamlRoot, items[0], Hwnd); break;
                 case 4: SidebarViewModel.Instance.AddFavorites(items.Where(i => i.IsFolder).Select(i => i.Path)); break;
@@ -964,7 +1025,6 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         if (tab.CurrentFolder is not { } folder) return;
         var bg = new List<MenuExtra>
         {
-            new(10, "New Folder"),
             new(11, "Get Info"),
             new(0, "View", [
                 new MenuExtra(20, "as Icons", Checked: tab.ViewMode == ViewMode.Icons),
@@ -976,20 +1036,43 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
                 new MenuExtra(31, "Date Modified", Checked: tab.SortKey == Core.FileSystem.SortKey.Modified),
                 new MenuExtra(32, "Size", Checked: tab.SortKey == Core.FileSystem.SortKey.Size),
                 new MenuExtra(33, "Kind", Checked: tab.SortKey == Core.FileSystem.SortKey.Kind),
+                MenuExtra.Separator,
+                new MenuExtra(34, "Ascending", Checked: !tab.SortDescending),
+                new MenuExtra(35, "Descending", Checked: tab.SortDescending),
             ]),
+            new(15, "Refresh"),
             new(12, "Show Hidden Files", Checked: AppServices.ShowHidden),
             SidebarViewModel.Instance.IsFavorite(folder)
                 ? new MenuExtra(14, "Remove This Folder from Favorites")
                 : new MenuExtra(13, "Add This Folder to Favorites"),
+            MenuExtra.Separator,
         };
+        // Explorer's own background items (its view adds these; the shell's folder menu doesn't).
+        bool canPaste = TransferService.CanPaste();
+        var undo = AppServices.FileOps.Undo.Peek();
+        bg.Add(new MenuExtra(16, "Paste", Enabled: canPaste) { UnlessShellHas = ["paste"] });
+        bg.Add(new MenuExtra(17, "Paste Shortcut", Enabled: canPaste) { UnlessShellHas = ["pastelink"] });
+        bg.Add(new MenuExtra(18, undo?.Description ?? "Undo", Enabled: undo is not null));
+        bg.Add(MenuExtra.Separator);
+        // Windows Terminal adds its own "Open in Terminal" to some menus; ours covers the rest.
+        bg.Add(new MenuExtra(19, "Open in Terminal") { UnlessShellHas = [WindowsTerminalVerb] });
+        if (PathUtil.Parent(folder) is not null) bg.Add(new MenuExtra(23, "Customize This Folder…"));
+
         var bgResult = ShellContextMenu.ShowForFolderBackground(Hwnd, folder, x, y, bg, verb => InterceptVerb(verb, tab, null), extended);
         switch (bgResult.ExtraId)
         {
-            case 10: _ = tab.NewFolderAsync(); break;
             case 11: _ = GetInfoAsync(); break;
             case 12: AppServices.ShowHidden = !AppServices.ShowHidden; break;
             case 13: SidebarViewModel.Instance.AddFavorite(folder); break;
             case 14: SidebarViewModel.Instance.RemoveFavorite(folder); break;
+            case 15: tab.Refresh(); break;
+            case 16: _ = PasteIntoAsync(tab, folder); break;
+            case 17: _ = PasteShortcutsAsync(tab, folder); break;
+            case 18: _ = UndoAsync(); break;
+            case 19: ShellInfo.OpenTerminal(folder); break;
+            case 23: ShellInfo.ShowCustomize(folder, Hwnd); break;
+            case 34 when tab.SortDescending: tab.SetSort(tab.SortKey); break;
+            case 35 when !tab.SortDescending: tab.SetSort(tab.SortKey); break;
             case 20: tab.SetViewMode(ViewMode.Icons); break;
             case 21: tab.SetViewMode(ViewMode.List); break;
             case 22: tab.SetViewMode(ViewMode.Columns); break;
@@ -999,6 +1082,9 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             case 33: tab.SetSort(Core.FileSystem.SortKey.Kind); break;
         }
     }
+
+    /// <summary>The verb of Windows Terminal's own "Open in Terminal" shell extension.</summary>
+    private const string WindowsTerminalVerb = "{9F156763-7844-4DC4-B2B1-901F640F5155}";
 
     /// <summary>Shell verbs we handle ourselves so they stay inside the app (and get undo records).</summary>
     private bool InterceptVerb(string verb, BrowserTabViewModel tab, IReadOnlyList<FileItemViewModel>? items)
@@ -1025,7 +1111,10 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             case "copy" or "cut" when items is { Count: > 0 }:
                 _ = TransferService.CopyToClipboardAsync(items.Select(i => i.Path).ToList(), verb == "cut");
                 return true;
-            case "paste":
+            case "paste" when items is { Count: 1 } && items[0].IsFolder && !items[0].IsDrive:
+                _ = PasteIntoAsync(tab, items[0].Path); // "Paste" on a folder pastes into that folder
+                return true;
+            case "paste" when items is null:
                 _ = PasteAsync(tab);
                 return true;
             case "newfolder":

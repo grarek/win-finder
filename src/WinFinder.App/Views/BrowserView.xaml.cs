@@ -64,6 +64,9 @@ public sealed partial class BrowserView : UserControl
         SyncScopeSelector();
 
         AddHandler(PointerPressedEvent, new PointerEventHandler(OnAnyPointerPressed), handledEventsToo: true);
+        // One handler for every list (including the column view's templated ones). handledEventsToo so
+        // a list part that marks the right-tap handled can't swallow the menu.
+        AddHandler(RightTappedEvent, new RightTappedEventHandler(OnAnyRightTapped), handledEventsToo: true);
     }
 
     public BrowserTabViewModel Tab { get; }
@@ -237,9 +240,18 @@ public sealed partial class BrowserView : UserControl
         e.Handled = true;
     }
 
-    private void Item_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    /// <summary>Right-click on an item (its menu) or on empty space in a list (the folder's menu), like Explorer.</summary>
+    private void OnAnyRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
-        if (sender is not ListViewBase list) return;
+        // Find the item list under the pointer; leave text boxes (rename, search) their own menu.
+        ListViewBase? list = null;
+        for (var node = e.OriginalSource as DependencyObject; node is not null && !ReferenceEquals(node, this); node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is TextBox) return;
+            if (node is ListViewBase found) { list = found; break; }
+        }
+        if (list is null) return;
+
         var item = ItemFrom(e.OriginalSource);
         IReadOnlyList<FileItemViewModel>? targets = null;
         if (item is not null)
@@ -253,7 +265,11 @@ public sealed partial class BrowserView : UserControl
         }
         else if (list.DataContext is ColumnViewModel column)
         {
-            Tab.Columns.SetActive(column);
+            Tab.Columns.SetActive(column); // keep the selection: in column view it decides which columns are open
+        }
+        else
+        {
+            list.SelectedItems.Clear(); // Explorer deselects when you right-click empty space
         }
         _host.ShowContextMenu(Tab, targets, e.GetPosition(null));
         e.Handled = true;

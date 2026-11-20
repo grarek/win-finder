@@ -6,6 +6,12 @@ namespace WinFinder.Core.Shell;
 public sealed record MenuExtra(int Id, string Text, IReadOnlyList<MenuExtra>? Children = null, bool Checked = false, bool Enabled = true)
 {
     public bool IsSeparator { get; init; }
+
+    /// <summary>
+    /// A fallback for something the shell usually provides: the item is dropped when the shell menu
+    /// already has an item with one of these verbs, or with the same text.
+    /// </summary>
+    public IReadOnlyList<string>? UnlessShellHas { get; init; }
     public static MenuExtra Separator => new(0, "") { IsSeparator = true };
 }
 
@@ -148,6 +154,7 @@ public static class ShellContextMenu
                 Native.InsertMenu(hmenu, pos++, Native.MF_BYPOSITION | Native.MF_SEPARATOR, UIntPtr.Zero, null);
 
             menu.QueryContextMenu(hmenu, pos, FirstShellId, LastShellId, flags);
+            DropExtrasTheShellProvides(hmenu, menu, extras);
 
             _active2 = menu as IContextMenu2;
             _active3 = menu as IContextMenu3;
@@ -178,6 +185,62 @@ public static class ShellContextMenu
             Native.DestroyMenu(hmenu);
         }
     }
+
+    private static void DropExtrasTheShellProvides(IntPtr hmenu, IContextMenu menu, IReadOnlyList<MenuExtra> extras)
+    {
+        var fallbacks = extras.Where(e => e.UnlessShellHas is not null).ToList();
+        if (fallbacks.Count == 0) return;
+
+        var verbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var texts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int count = Native.GetMenuItemCount(hmenu);
+        for (int i = 0; i < count; i++)
+        {
+            uint id = Native.GetMenuItemID(hmenu, i);
+            if (id < FirstShellId || id > LastShellId) continue;
+            if (GetVerb(menu, id - FirstShellId) is { } verb) verbs.Add(verb);
+            if (GetText(hmenu, i) is { } text) texts.Add(text);
+        }
+
+        bool removed = false;
+        foreach (var extra in fallbacks)
+        {
+            if (extra.UnlessShellHas!.Any(verbs.Contains) || texts.Contains(extra.Text))
+                removed |= Native.DeleteMenu(hmenu, ExtraBase + (uint)extra.Id, 0 /* MF_BYCOMMAND */);
+        }
+        if (removed) TidySeparators(hmenu);
+    }
+
+    /// <summary>Removes separators left doubled (or at either end) after items were removed.</summary>
+    private static void TidySeparators(IntPtr hmenu)
+    {
+        bool previousWasSeparator = true; // drops a leading separator
+        for (int i = 0; i < Native.GetMenuItemCount(hmenu);)
+        {
+            bool separator = (Native.GetMenuState(hmenu, (uint)i, Native.MF_BYPOSITION) & Native.MF_SEPARATOR) != 0;
+            if (separator && previousWasSeparator)
+            {
+                Native.DeleteMenu(hmenu, (uint)i, Native.MF_BYPOSITION);
+                continue;
+            }
+            previousWasSeparator = separator;
+            i++;
+        }
+        int last = Native.GetMenuItemCount(hmenu) - 1;
+        if (last >= 0 && (Native.GetMenuState(hmenu, (uint)last, Native.MF_BYPOSITION) & Native.MF_SEPARATOR) != 0)
+            Native.DeleteMenu(hmenu, (uint)last, Native.MF_BYPOSITION);
+    }
+
+    /// <summary>A menu item's text without its access-key ampersand ("Open in &amp;Terminal" → "Open in Terminal").</summary>
+    private static string? GetText(IntPtr hmenu, int position)
+    {
+        var buffer = new System.Text.StringBuilder(256);
+        if (GetMenuString(hmenu, (uint)position, buffer, buffer.Capacity, Native.MF_BYPOSITION) <= 0) return null;
+        return buffer.ToString().Replace("&&", "\0").Replace("&", "").Replace("\0", "&");
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetMenuString(IntPtr hMenu, uint uIDItem, System.Text.StringBuilder lpString, int cchMax, uint flags);
 
     private static void InsertExtra(IntPtr hmenu, MenuExtra extra, ref uint pos)
     {

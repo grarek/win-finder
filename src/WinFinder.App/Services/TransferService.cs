@@ -60,6 +60,18 @@ public static class TransferService
         catch { return false; }
     }
 
+    /// <summary>The files and folders on the clipboard (copied or cut), if any.</summary>
+    public static async Task<IReadOnlyList<string>> GetClipboardPathsAsync()
+    {
+        try
+        {
+            var content = Clipboard.GetContent();
+            if (!content.Contains(StandardDataFormats.StorageItems)) return Array.Empty<string>();
+            return await GetPathsAsync(content);
+        }
+        catch { return Array.Empty<string>(); }
+    }
+
     /// <summary>Pastes clipboard files into <paramref name="folder"/>. Returns the created paths.</summary>
     public static async Task<IReadOnlyList<string>> PasteAsync(string folder, IntPtr owner)
     {
