@@ -67,7 +67,8 @@ Windows only allows a separate "Favorites" heading while **Settings → Personal
 - Explorer's rules apply: the same drive moves, a different drive copies; hold Ctrl to copy or Shift to move.
 
 ### Real shell integration
-- The native Explorer context menu, with every shell extension (7-Zip, VS Code, Send to, Open with).
+- The native Explorer context menu, with every shell extension (7-Zip, VS Code, Send to, Open with), dark in dark mode.
+- Explorer's own extras too: **Compress to** ZIP, 7z or TAR; **Open in New Window**; and, on empty space, **Paste**, **Paste Shortcut**, **Undo**, **Refresh**, **Open in Terminal** and **Customize This Folder**.
 - Copies, moves, renames and deletes go through IFileOperation: native progress, conflict and UAC dialogs, and the Recycle Bin.
 - **Ctrl+Z undoes** them, including moves to the Recycle Bin.
 - The clipboard works both ways with Explorer.

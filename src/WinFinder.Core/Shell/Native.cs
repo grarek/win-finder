@@ -248,6 +248,18 @@ internal static class Native
 
     // Menus
     public const uint MF_STRING = 0x0, MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_POPUP = 0x10, MF_SEPARATOR = 0x800, MF_BYPOSITION = 0x400;
+
+    [DllImport("user32.dll")]
+    public static extern int GetMenuItemCount(IntPtr hMenu);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetMenuItemID(IntPtr hMenu, int nPos);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetMenuState(IntPtr hMenu, uint uId, uint uFlags);
+
+    [DllImport("user32.dll")]
+    public static extern bool DeleteMenu(IntPtr hMenu, uint uPosition, uint uFlags);
     public const uint TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 0x2;
     public const uint CMF_NORMAL = 0x0, CMF_EXPLORE = 0x4, CMF_CANRENAME = 0x10, CMF_EXTENDEDVERBS = 0x100;
     public const uint GCS_VERBW = 0x4;
@@ -271,8 +283,11 @@ internal static class Native
     [DllImport("shell32.dll")]
     public static extern IntPtr ILFindLastID(IntPtr pidl);
 
-    [DllImport("shell32.dll")]
-    public static extern bool ILIsEmpty(IntPtr pidl);
+    /// <summary>
+    /// True for the desktop's (empty) item ID list. ILIsEmpty is a macro in shlobj_core.h, not a shell32
+    /// export, so importing it threw EntryPointNotFoundException and the folder background menu never showed.
+    /// </summary>
+    public static bool ILIsEmpty(IntPtr pidl) => pidl == IntPtr.Zero || Marshal.ReadInt16(pidl) == 0;
 
     [DllImport("shell32.dll")]
     public static extern void ILFree(IntPtr pidl);
