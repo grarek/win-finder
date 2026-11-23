@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Graphics.Imaging;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinFinder.Core.FileSystem;
@@ -66,8 +67,12 @@ public sealed class IconCache
     {
         try
         {
+            // Windows has no EPS thumbnail handler, so show the preview image embedded in the file.
+            ThumbnailData? data = mode == ThumbnailMode.Thumbnail && EpsPreview.IsEps(path)
+                ? await LoadEpsPreviewAsync(path, px)
+                : null;
+
             // The shell occasionally fails a first request while its icon cache warms up; retry briefly.
-            ThumbnailData? data = null;
             for (int attempt = 0; attempt < 3 && data is null; attempt++)
             {
                 if (attempt > 0) await Task.Delay(150 * attempt);
@@ -89,6 +94,34 @@ public sealed class IconCache
         finally
         {
             _inflight.Remove(key);
+        }
+    }
+
+    /// <summary>Decodes an EPS file's embedded preview, scaled to fit within <paramref name="px"/> square.</summary>
+    private static async Task<ThumbnailData?> LoadEpsPreviewAsync(string path, int px)
+    {
+        byte[]? encoded = await Task.Run(() => EpsPreview.Read(path));
+        if (encoded is null) return null;
+        try
+        {
+            using var stream = new MemoryStream(encoded).AsRandomAccessStream();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            uint w = decoder.OrientedPixelWidth, h = decoder.OrientedPixelHeight;
+            if (w == 0 || h == 0) return null;
+            double scale = Math.Min(1.0, (double)px / Math.Max(w, h));
+            var transform = new BitmapTransform
+            {
+                ScaledWidth = Math.Max(1, (uint)Math.Round(w * scale)),
+                ScaledHeight = Math.Max(1, (uint)Math.Round(h * scale)),
+                InterpolationMode = BitmapInterpolationMode.Fant,
+            };
+            var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, transform,
+                ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb);
+            return new ThumbnailData((int)transform.ScaledWidth, (int)transform.ScaledHeight, pixels.DetachPixelData());
+        }
+        catch
+        {
+            return null;
         }
     }
 

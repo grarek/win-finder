@@ -91,6 +91,7 @@ public sealed partial class QuickLookOverlay : UserControl
             string ext = item.Entry.Extension;
             if (item.IsFolder) await ShowFallbackAsync(item, version);
             else if (ImageTypes.Contains(ext)) await ShowImageAsync(item, version);
+            else if (EpsPreview.IsEps(item.Path)) await ShowEpsAsync(item, version);
             else if (WebTypes.Contains(ext)) await ShowWebAsync(item, version);
             else if (MediaTypes.Contains(ext)) { ShowMedia(item, version); mediaStillOpening = true; }
             else if (TextTypes.Contains(ext) || await LooksLikeTextAsync(item.Path)) await ShowTextAsync(item, version);
@@ -148,7 +149,21 @@ public sealed partial class QuickLookOverlay : UserControl
         });
         if (version != _version) return;
         if (bytes is null) { await ShowFallbackAsync(item, version); return; }
+        await ShowImageBytesAsync(item, bytes, version);
+    }
 
+    /// <summary>Shows the preview image embedded in an EPS file; without one, the usual file info card.</summary>
+    private async Task ShowEpsAsync(FileItemViewModel item, int version)
+    {
+        string path = item.Path;
+        byte[]? bytes = await Task.Run(() => EpsPreview.Read(path));
+        if (version != _version) return;
+        if (bytes is null) { await ShowFallbackAsync(item, version); return; }
+        await ShowImageBytesAsync(item, bytes, version);
+    }
+
+    private async Task ShowImageBytesAsync(FileItemViewModel item, byte[] bytes, int version)
+    {
         bool animated = string.Equals(item.Entry.Extension, ".gif", StringComparison.OrdinalIgnoreCase);
         var bitmap = new BitmapImage { AutoPlay = true };
         if (!animated)
