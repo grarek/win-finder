@@ -67,6 +67,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         TransferService.CutChanged += OnCutChanged;
         UpdateService.Instance.UpdateAvailable += ShowUpdate;
+        UpdateService.Instance.InstallStateChanged += ShowInstallState;
         if (UpdateService.Instance.Available is { } pending) ShowUpdate(pending);
         else if (UpdateService.Instance.TakeLastResult() is { } lastResult) ShowUpdateResult(lastResult);
 
@@ -95,6 +96,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             WindowManager.OnWindowClosed(this);
             TransferService.CutChanged -= OnCutChanged;
             UpdateService.Instance.UpdateAvailable -= ShowUpdate;
+            UpdateService.Instance.InstallStateChanged -= ShowInstallState;
             foreach (var tab in ViewModel.Tabs.ToList()) tab.Dispose();
         };
 
@@ -579,6 +581,12 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
     private void ShowUpdate(Core.Updates.ReleaseInfo release)
     {
         _offeredUpdate = release;
+        // A window opened (or a background check that ran) mid-update follows the update under way.
+        if (UpdateService.Instance.InstallState.Phase is UpdateInstallPhase.Downloading or UpdateInstallPhase.Restarting)
+        {
+            ShowInstallState(UpdateService.Instance.InstallState);
+            return;
+        }
         UpdateNowButton.Visibility = Visibility.Visible;
         WhatsNewLink.Visibility = Visibility.Visible;
         UpdateBar.Title = "Update available";
@@ -591,7 +599,7 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
         UpdateBar.IsOpen = true;
     }
 
-    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+    private void UpdateNow_Click(object sender, RoutedEventArgs e)
     {
         if (_offeredUpdate is not { } release) return;
         if (UpdateService.Instance.InPlaceUpdateBlocker(release) is { } reason)
@@ -601,28 +609,43 @@ public sealed partial class MainWindow : Window, IBrowserHost, INotifyPropertyCh
             UpdateBar.Message = reason + " The release page has been opened so you can download it.";
             return;
         }
+        // Every window's bar follows the one app-wide install through ShowInstallState.
+        UpdateService.Instance.Install(release);
+    }
 
-        UpdateNowButton.IsEnabled = false;
-        SkipVersionLink.Visibility = Visibility.Collapsed;
-        UpdateProgress.Visibility = Visibility.Visible;
-        UpdateProgress.Value = 0;
-        UpdateBar.IsClosable = false;
-        UpdateBar.Message = $"Downloading WinFinder {release.Version.ToString(3)}…";
-        try
+    /// <summary>Mirrors the app-wide install run, so every open window shows the same download.</summary>
+    private void ShowInstallState(UpdateInstallState state)
+    {
+        if (state.Release is not { } release) return;
+        string version = release.Version.ToString(3);
+        switch (state.Phase)
         {
-            var progress = new Progress<double>(p => UpdateProgress.Value = p);
-            await UpdateService.Instance.PrepareAndLaunchUpdaterAsync(release, progress);
-            UpdateBar.Message = "Restarting to finish the update…";
-            WindowManager.ExitForUpdate();
-        }
-        catch (Exception ex)
-        {
-            UpdateBar.Severity = InfoBarSeverity.Error;
-            UpdateBar.Title = "Update failed";
-            UpdateBar.Message = ex.Message;
-            UpdateBar.IsClosable = true;
-            UpdateNowButton.IsEnabled = true;
-            UpdateProgress.Visibility = Visibility.Collapsed;
+            case UpdateInstallPhase.Downloading:
+            case UpdateInstallPhase.Restarting:
+                UpdateBar.Severity = InfoBarSeverity.Informational;
+                UpdateBar.Title = "Updating";
+                UpdateBar.Message = state.Phase == UpdateInstallPhase.Downloading
+                    ? $"Downloading WinFinder {version}…"
+                    : "Restarting to finish the update…";
+                UpdateNowButton.Visibility = Visibility.Visible;
+                UpdateNowButton.IsEnabled = false;
+                SkipVersionLink.Visibility = Visibility.Collapsed;
+                UpdateProgress.Visibility = Visibility.Visible;
+                UpdateProgress.Value = state.Progress;
+                UpdateBar.IsClosable = false;
+                UpdateBar.IsOpen = true;
+                break;
+            case UpdateInstallPhase.Failed:
+                _offeredUpdate = release;
+                UpdateBar.Severity = InfoBarSeverity.Error;
+                UpdateBar.Title = "Update failed";
+                UpdateBar.Message = state.Error;
+                UpdateBar.IsClosable = true;
+                UpdateNowButton.Visibility = Visibility.Visible;
+                UpdateNowButton.IsEnabled = true;
+                UpdateProgress.Visibility = Visibility.Collapsed;
+                UpdateBar.IsOpen = true;
+                break;
         }
     }
 

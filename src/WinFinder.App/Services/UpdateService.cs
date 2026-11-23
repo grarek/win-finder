@@ -154,11 +154,56 @@ public sealed class UpdateService
         catch { return false; }
     }
 
+    /// <summary>Where the app-wide install run stands; every window's update bar shows this.</summary>
+    public UpdateInstallState InstallState { get; private set; } = UpdateInstallState.Idle;
+
+    /// <summary>Raised on the UI thread whenever <see cref="InstallState"/> changes (including download progress).</summary>
+    public event Action<UpdateInstallState>? InstallStateChanged;
+
+    private void SetInstallState(UpdateInstallState state)
+    {
+        InstallState = state;
+        InstallStateChanged?.Invoke(state);
+    }
+
+    /// <summary>
+    /// Downloads and installs <paramref name="release"/>, then exits so the helper can swap the files.
+    /// One run for the whole app: every window offers "Update and restart", and a click in another
+    /// window while a download is under way joins it instead of starting a second download into the
+    /// same file. Must be called on the UI thread; the outcome arrives through <see cref="InstallStateChanged"/>.
+    /// </summary>
+    public void Install(ReleaseInfo release)
+    {
+        if (InstallState.Phase is UpdateInstallPhase.Downloading or UpdateInstallPhase.Restarting) return;
+        _ = RunInstallAsync(release);
+    }
+
+    private async Task RunInstallAsync(ReleaseInfo release)
+    {
+        SetInstallState(new(UpdateInstallPhase.Downloading, release, 0, null));
+        try
+        {
+            // Created on the UI thread, so progress reports come back on it.
+            var progress = new Progress<double>(p =>
+            {
+                if (InstallState.Phase == UpdateInstallPhase.Downloading) SetInstallState(InstallState with { Progress = p });
+            });
+            await PrepareAndLaunchUpdaterAsync(release, progress);
+        }
+        catch (Exception ex)
+        {
+            SetInstallState(new(UpdateInstallPhase.Failed, release, 0, ex.Message));
+            return;
+        }
+        SetInstallState(new(UpdateInstallPhase.Restarting, release, 1, null));
+        WindowManager.ExitForUpdate();
+    }
+
     /// <summary>
     /// Downloads and stages the update, starts the swap script, and returns. The caller must then
     /// exit the app promptly (the script waits for this process to end before replacing files).
     /// </summary>
-    public async Task PrepareAndLaunchUpdaterAsync(ReleaseInfo release, IProgress<double>? progress, CancellationToken ct = default)
+    private async Task PrepareAndLaunchUpdaterAsync(ReleaseInfo release, IProgress<double>? progress, CancellationToken ct = default)
     {
         var asset = release.AssetFor(RuntimeInformation.ProcessArchitecture)
                     ?? throw new InvalidOperationException("No download for this PC's processor.");
@@ -304,4 +349,11 @@ public sealed class UpdateService
         }
         try { Remove-Item -LiteralPath (Split-Path $Source -Parent) -Recurse -Force -ErrorAction SilentlyContinue } catch {}
         """;
+}
+
+public enum UpdateInstallPhase { Idle, Downloading, Restarting, Failed }
+
+public sealed record UpdateInstallState(UpdateInstallPhase Phase, ReleaseInfo? Release, double Progress, string? Error)
+{
+    public static UpdateInstallState Idle { get; } = new(UpdateInstallPhase.Idle, null, 0, null);
 }
